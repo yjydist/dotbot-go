@@ -23,6 +23,7 @@ const (
 
 type Options struct {
 	ConfigPath string
+	Check      bool
 	DryRun     bool
 	OutputMode output.Mode
 	NoColor    bool
@@ -76,20 +77,27 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "stages: create=%d link=%d clean=%d\n", len(cfg.Create.Paths), len(cfg.Links), len(cfg.Clean.Paths))
 	}
 
-	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, opts.DryRun)
-	output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, createResult.Entries)
+	dryRun := opts.DryRun || opts.Check
+	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, dryRun)
+	if !opts.Check {
+		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, createResult.Entries)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	linkResult, err := linker.Apply(cfg.Links, opts.DryRun)
-	output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, linkResult.Entries)
+	linkResult, err := linker.Apply(cfg.Links, dryRun)
+	if !opts.Check {
+		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, linkResult.Entries)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	cleanResult, err := cleaner.Apply(*cfg, opts.DryRun)
-	output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, cleanResult.Entries)
+	cleanResult, err := cleaner.Apply(*cfg, dryRun)
+	if !opts.Check {
+		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, cleanResult.Entries)
+	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
@@ -104,6 +112,12 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	for _, entry := range cleanResult.Entries {
 		summary.Add(entry.Status)
+	}
+	if opts.Check {
+		if opts.OutputMode != output.ModeQuiet {
+			fmt.Fprintln(stdout, "check ok")
+		}
+		return exitSuccess
 	}
 	output.WriteSummary(stdout, opts.OutputMode, summary)
 	return exitSuccess
@@ -123,6 +137,7 @@ func parseFlags(args []string, stdout, stderr io.Writer) (Options, bool, int, er
 	fs.SetOutput(io.Discard)
 	fs.StringVar(&opts.ConfigPath, "config", config.DefaultConfigName, "")
 	fs.StringVar(&opts.ConfigPath, "c", config.DefaultConfigName, "")
+	fs.BoolVar(&opts.Check, "check", false, "")
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "")
 	verbose := fs.Bool("verbose", false, "")
 	quiet := fs.Bool("quiet", false, "")
@@ -176,6 +191,7 @@ func writeHelp(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Flags:")
 	fmt.Fprintf(w, "  -c, --config <path>   配置文件路径, 默认: ./%s\n", config.DefaultConfigName)
+	fmt.Fprintln(w, "      --check           仅校验配置和关键运行前条件")
 	fmt.Fprintln(w, "      --dry-run         仅展示计划动作, 不修改文件系统")
 	fmt.Fprintln(w, "      --verbose         输出更详细的信息")
 	fmt.Fprintln(w, "      --quiet           仅输出失败信息")

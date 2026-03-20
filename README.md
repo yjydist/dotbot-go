@@ -118,6 +118,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 第一版计划支持的 CLI 参数:
 
 - `-c`, `--config`
+- `--check`
 - `--dry-run`
 - `--verbose`
 - `--quiet`
@@ -126,6 +127,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 其中:
 
 - 不传 `-c` 时, 默认读取当前工作目录下的 `dotbot-go.toml`
+- `--check` 只校验配置和关键运行前条件, 不修改文件系统
 - `--verbose` 和 `--quiet` 互斥
 - `--verbose` 会额外输出配置文件路径, 基准目录, 默认值摘要, 以及阶段统计
 
@@ -257,6 +259,12 @@ dotfiles/
 - 失败即停
 - 不承诺回滚
 - `force = true` 的覆盖风险由用户承担
+
+如果你只想做纯校验, 可以使用:
+
+```sh
+dotbot-go --check -c dotbot-go.toml
+```
 
 ## Dry Run
 

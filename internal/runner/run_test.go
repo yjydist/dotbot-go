@@ -151,6 +151,47 @@ func TestRunQuietSuppressesSuccessOutput(t *testing.T) {
 	}
 }
 
+func TestRunCheckValidatesWithoutApplying(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "dotbot-go.toml")
+	if err := os.MkdirAll(filepath.Join(baseDir, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "git", "gitconfig"), []byte("[user]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	contents := strings.Join([]string{
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"git/gitconfig\"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := Run([]string{"--check"}, &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run(check) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "check ok") {
+		t.Fatalf("stdout = %q, want check ok", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "[ok]") || strings.Contains(stdout.String(), "[dry-run]") {
+		t.Fatalf("stdout = %q, check should not print action lines", stdout.String())
+	}
+	if _, err := os.Lstat(filepath.Join(homeDir, ".gitconfig")); !os.IsNotExist(err) {
+		t.Fatalf("check should not create symlink, err=%v", err)
+	}
+}
+
 func TestRunVerboseShowsConfigDetails(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "dotbot-go.toml")

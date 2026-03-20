@@ -41,6 +41,7 @@
 | Dry Run | 必须展示阶段, 动作, 目标, 决策, 结果 |
 | 日志粒度 | 默认, `--verbose`, `--quiet` |
 | CLI 参数 | `-c/--config`, `--dry-run`, `--verbose`, `--quiet`, `--no-color`, `-h/--help` |
+| 纯校验能力 | `--check` |
 | 退出码 | `0` 成功, `1` 运行时错误, `2` 配置错误 |
 | 第一版平台 | macOS 和 Linux |
 
@@ -850,6 +851,7 @@ config error: [[link]][1].source: required field is missing
 第一版 CLI 固定支持以下参数:
 
 - `-c, --config <path>`: 指定配置文件路径
+- `--check`: 只校验配置和关键运行前条件, 不修改文件系统
 - `--dry-run`: 只展示计划动作, 不修改文件系统
 - `--verbose`: 输出更详细的信息
 - `--quiet`: 仅输出失败信息
