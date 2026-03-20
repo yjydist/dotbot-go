@@ -8,7 +8,7 @@ import (
 func TestFormatEntry(t *testing.T) {
 	t.Parallel()
 
-	got := FormatEntry(true, Entry{
+	got := FormatEntry(Options{DryRun: true}, Entry{
 		Stage:    "link",
 		Target:   "~/.gitconfig",
 		Source:   "./git/gitconfig",
@@ -23,5 +23,14 @@ func TestFormatEntry(t *testing.T) {
 	}
 	if !strings.Contains(got, "create symlink") {
 		t.Fatalf("FormatEntry() = %q, want decision", got)
+	}
+}
+
+func TestFormatEntryWithColor(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{EnableColor: true}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
+	if !strings.Contains(got, "\x1b[") {
+		t.Fatalf("FormatEntry() = %q, want ANSI color code", got)
 	}
 }

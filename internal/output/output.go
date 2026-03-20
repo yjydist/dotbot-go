@@ -3,6 +3,7 @@ package output
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -44,6 +45,12 @@ type Summary struct {
 	Failed   int
 }
 
+type Options struct {
+	Mode        Mode
+	DryRun      bool
+	EnableColor bool
+}
+
 func (s *Summary) Add(status Status) {
 	switch status {
 	case StatusCreated:
@@ -62,25 +69,25 @@ func (s *Summary) Add(status Status) {
 	}
 }
 
-func WriteEntries(w io.Writer, mode Mode, dryRun bool, entries []Entry) {
+func WriteEntries(w io.Writer, opts Options, entries []Entry) {
 	for _, entry := range entries {
-		if mode == ModeQuiet && entry.Status != StatusFailed {
+		if opts.Mode == ModeQuiet && entry.Status != StatusFailed {
 			continue
 		}
-		fmt.Fprintln(w, FormatEntry(dryRun, entry))
+		fmt.Fprintln(w, FormatEntry(opts, entry))
 	}
 }
 
-func WriteSummary(w io.Writer, mode Mode, summary Summary) {
-	if mode == ModeQuiet {
+func WriteSummary(w io.Writer, opts Options, summary Summary) {
+	if opts.Mode == ModeQuiet {
 		return
 	}
 	fmt.Fprintf(w, "summary: created=%d linked=%d skipped=%d replaced=%d deleted=%d failed=%d\n", summary.Created, summary.Linked, summary.Skipped, summary.Replaced, summary.Deleted, summary.Failed)
 }
 
-func FormatEntry(dryRun bool, entry Entry) string {
+func FormatEntry(opts Options, entry Entry) string {
 	prefix := "[ok]"
-	if dryRun {
+	if opts.DryRun {
 		prefix = "[dry-run]"
 	} else if entry.Status == StatusInfo {
 		prefix = "[info]"
@@ -89,6 +96,7 @@ func FormatEntry(dryRun bool, entry Entry) string {
 	} else if entry.Status == StatusFailed {
 		prefix = "[fail]"
 	}
+	prefix = colorize(prefix, entry.Status, opts)
 	object := entry.Target
 	if entry.Source != "" {
 		object = fmt.Sprintf("%s <- %s", entry.Target, entry.Source)
@@ -108,4 +116,39 @@ func pad(value string, width int) string {
 		return value
 	}
 	return value + strings.Repeat(" ", width-len(value))
+}
+
+func ColorEnabled(w io.Writer, noColor bool) bool {
+	if noColor {
+		return false
+	}
+	file, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
+}
+
+func colorize(prefix string, status Status, opts Options) string {
+	if !opts.EnableColor {
+		return prefix
+	}
+	color := ""
+	switch {
+	case opts.DryRun:
+		color = "36"
+	case status == StatusInfo:
+		color = "34"
+	case status == StatusSkipped:
+		color = "33"
+	case status == StatusFailed:
+		color = "31"
+	default:
+		color = "32"
+	}
+	return fmt.Sprintf("\x1b[%sm%s\x1b[0m", color, prefix)
 }

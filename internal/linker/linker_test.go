@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dotbot-go/internal/config"
-	"dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
 func TestApplyCreatesSymlink(t *testing.T) {

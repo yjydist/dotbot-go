@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/config"
 )
 
 func TestApplyRemovesDeadLinkWithinBase(t *testing.T) {

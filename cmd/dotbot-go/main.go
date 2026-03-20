@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"dotbot-go/internal/runner"
+	"github.com/yjydist/dotbot-go/internal/runner"
 )
 
 func main() {

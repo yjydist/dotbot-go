@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"dotbot-go/internal/cleaner"
-	"dotbot-go/internal/config"
-	"dotbot-go/internal/creator"
-	"dotbot-go/internal/linker"
-	"dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/cleaner"
+	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/creator"
+	"github.com/yjydist/dotbot-go/internal/linker"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
 const (
@@ -76,11 +76,16 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		)
 		fmt.Fprintf(stdout, "stages: create=%d link=%d clean=%d\n", len(cfg.Create.Paths), len(cfg.Links), len(cfg.Clean.Paths))
 	}
+	outOpts := output.Options{
+		Mode:        opts.OutputMode,
+		DryRun:      opts.DryRun,
+		EnableColor: output.ColorEnabled(stdout, opts.NoColor),
+	}
 
 	dryRun := opts.DryRun || opts.Check
 	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, dryRun)
 	if !opts.Check {
-		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, createResult.Entries)
+		output.WriteEntries(stdout, outOpts, createResult.Entries)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -88,7 +93,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	linkResult, err := linker.Apply(cfg.Links, dryRun)
 	if !opts.Check {
-		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, linkResult.Entries)
+		output.WriteEntries(stdout, outOpts, linkResult.Entries)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -96,7 +101,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	}
 	cleanResult, err := cleaner.Apply(*cfg, dryRun)
 	if !opts.Check {
-		output.WriteEntries(stdout, opts.OutputMode, opts.DryRun, cleanResult.Entries)
+		output.WriteEntries(stdout, outOpts, cleanResult.Entries)
 	}
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -119,7 +124,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		}
 		return exitSuccess
 	}
-	output.WriteSummary(stdout, opts.OutputMode, summary)
+	output.WriteSummary(stdout, outOpts, summary)
 	return exitSuccess
 }
 

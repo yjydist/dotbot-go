@@ -1,4 +1,4 @@
-module dotbot-go
+module github.com/yjydist/dotbot-go
 
 go 1.25.0
 

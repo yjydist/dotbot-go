@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"dotbot-go/internal/config"
-	"dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
 type Result struct {
@@ -113,9 +113,10 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 	}
 
 	if os.IsNotExist(err) {
-		entry.Decision = "create symlink"
+		entry.Decision = "linked"
 		entry.Status = output.StatusLinked
 		if dryRun {
+			entry.Decision = "create symlink"
 			return entry, change{linked: true}, false, nil
 		}
 		if err := os.Symlink(linkPath, link.Target); err != nil {
@@ -141,9 +142,10 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 			entry.Message = "target already exists as symlink and relink=false"
 			return entry, change{}, false, fmt.Errorf("target already exists as symlink and relink=false: %s", link.Target)
 		}
-		entry.Decision = "replace"
+		entry.Decision = "replaced"
 		entry.Status = output.StatusReplaced
 		if dryRun {
+			entry.Decision = "replace"
 			if link.Force {
 				entry.Message = "force=true"
 			}
@@ -170,10 +172,11 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 		entry.Message = "target exists and force=false"
 		return entry, change{}, false, fmt.Errorf("target exists and force=false: %s", link.Target)
 	}
-	entry.Decision = "replace"
+	entry.Decision = "replaced"
 	entry.Status = output.StatusReplaced
 	entry.Message = "force=true"
 	if dryRun {
+		entry.Decision = "replace"
 		return entry, change{replaced: true}, false, nil
 	}
 	if err := os.RemoveAll(link.Target); err != nil {

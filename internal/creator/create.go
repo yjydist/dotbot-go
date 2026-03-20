@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
 type Result struct {
@@ -43,7 +43,7 @@ func Apply(paths []string, mode os.FileMode, dryRun bool) (Result, error) {
 			return result, fmt.Errorf("runtime error: [create].paths: mkdir %s: %w", path, err)
 		}
 		result.Created++
-		result.Entries = append(result.Entries, output.Entry{Stage: "create", Target: path, Decision: string(output.StatusCreated), Status: output.StatusCreated})
+		result.Entries = append(result.Entries, output.Entry{Stage: "create", Target: path, Decision: "created", Status: output.StatusCreated})
 	}
 	return result, nil
 }

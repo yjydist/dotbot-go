@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"dotbot-go/internal/config"
-	"dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
 type Result struct {
@@ -104,8 +104,9 @@ func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *outpu
 		out := output.Entry{Stage: "clean", Target: path, Decision: string(output.StatusSkipped), Status: output.StatusSkipped, Message: "outside base and force=false"}
 		return &out, 0, 1, nil
 	}
-	decision := output.Entry{Stage: "clean", Target: path, Decision: "delete dead symlink", Status: output.StatusDeleted}
+	decision := output.Entry{Stage: "clean", Target: path, Decision: "deleted", Status: output.StatusDeleted}
 	if dryRun {
+		decision.Decision = "delete dead symlink"
 		return &decision, 1, 0, nil
 	}
 	if err := os.Remove(path); err != nil {

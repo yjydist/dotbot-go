@@ -130,6 +130,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 - `--check` 只校验配置和关键运行前条件, 不修改文件系统
 - `--verbose` 和 `--quiet` 互斥
 - `--verbose` 会额外输出配置文件路径, 基准目录, 默认值摘要, 以及阶段统计
+- 终端环境下默认允许彩色输出, `--no-color` 可关闭
 
 ## 推荐目录结构
 

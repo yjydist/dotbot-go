@@ -727,6 +727,7 @@ summary: created=2 linked=4 skipped=1 replaced=1 deleted=0 failed=0
 
 - 默认允许彩色输出
 - 支持 `--no-color` 关闭颜色
+- 仅在终端环境下启用颜色
 - 颜色只做辅助, 不承载唯一语义
 - 即使去掉颜色, 文本本身也必须可读
 
