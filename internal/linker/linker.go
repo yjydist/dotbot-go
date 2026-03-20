@@ -65,16 +65,18 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 
 	if link.Create {
 		parent := filepath.Dir(link.Target)
-		if dryRun {
-			entry.Decision = "create symlink"
-			entry.Status = output.StatusLinked
-			return entry, change{linked: true}, false, nil
-		}
-		if err := os.MkdirAll(parent, 0o777); err != nil {
+		if !dryRun {
+			if err := os.MkdirAll(parent, 0o777); err != nil {
+				entry.Decision = string(output.StatusFailed)
+				entry.Status = output.StatusFailed
+				entry.Message = err.Error()
+				return entry, change{}, false, fmt.Errorf("create parent directory %s: %w", parent, err)
+			}
+		} else if _, err := os.Stat(parent); err != nil && !os.IsNotExist(err) {
 			entry.Decision = string(output.StatusFailed)
 			entry.Status = output.StatusFailed
 			entry.Message = err.Error()
-			return entry, change{}, false, fmt.Errorf("create parent directory %s: %w", parent, err)
+			return entry, change{}, false, fmt.Errorf("stat target parent %s: %w", parent, err)
 		}
 	} else {
 		if _, err := os.Stat(filepath.Dir(link.Target)); err != nil {

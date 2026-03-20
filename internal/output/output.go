@@ -63,10 +63,10 @@ func (s *Summary) Add(status Status) {
 }
 
 func WriteEntries(w io.Writer, mode Mode, dryRun bool, entries []Entry) {
-	if mode == ModeQuiet {
-		return
-	}
 	for _, entry := range entries {
+		if mode == ModeQuiet && entry.Status != StatusFailed {
+			continue
+		}
 		fmt.Fprintln(w, FormatEntry(dryRun, entry))
 	}
 }

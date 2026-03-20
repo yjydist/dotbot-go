@@ -162,6 +162,11 @@ func Load(opts LoadOptions) (*Config, error) {
 func buildConfig(raw rawConfig, meta toml.MetaData, configPath, workingDir, homeDir string) (*Config, error) {
 	baseDir := filepath.Dir(configPath)
 
+	defaultCreateMode, err := resolveOptionalMode(raw.Default.Create.Mode, 0o777)
+	if err != nil {
+		return nil, configError("[default.create].mode", err.Error())
+	}
+
 	createMode, err := resolveMode(raw.Create.Mode, raw.Default.Create.Mode, 0o777)
 	if err != nil {
 		return nil, configError("[create].mode", err.Error())
@@ -196,7 +201,7 @@ func buildConfig(raw rawConfig, meta toml.MetaData, configPath, workingDir, home
 				Relative:      boolValue(nil, raw.Default.Link.Relative, false),
 				IgnoreMissing: boolValue(nil, raw.Default.Link.IgnoreMissing, false),
 			},
-			Create: CreateDefaults{Mode: mustMode(raw.Default.Create.Mode, 0o777)},
+			Create: CreateDefaults{Mode: defaultCreateMode},
 			Clean:  CleanDefaults{Force: boolValue(nil, raw.Default.Clean.Force, false), Recursive: boolValue(nil, raw.Default.Clean.Recursive, false)},
 		},
 		Create: CreateConfig{Paths: createPaths, Mode: createMode},
@@ -317,12 +322,11 @@ func resolveMode(explicit, fallback string, hardDefault os.FileMode) (os.FileMod
 	return hardDefault, nil
 }
 
-func mustMode(value string, hardDefault os.FileMode) os.FileMode {
-	mode, err := resolveMode("", value, hardDefault)
-	if err != nil {
-		return hardDefault
+func resolveOptionalMode(value string, hardDefault os.FileMode) (os.FileMode, error) {
+	if value == "" {
+		return hardDefault, nil
 	}
-	return mode
+	return parseMode(value)
 }
 
 func parseMode(value string) (os.FileMode, error) {

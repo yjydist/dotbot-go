@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"dotbot-go/internal/config"
+	"dotbot-go/internal/output"
 )
 
 func TestApplyCreatesSymlink(t *testing.T) {
@@ -72,5 +73,34 @@ func TestApplyIgnoreMissingSkips(t *testing.T) {
 	}
 	if got, want := result.Skipped, 1; got != want {
 		t.Fatalf("Result.Skipped = %d, want %d", got, want)
+	}
+}
+
+func TestApplyDryRunDetectsExistingTargetConflictWithCreate(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	source := filepath.Join(baseDir, "source.txt")
+	targetDir := filepath.Join(baseDir, "nested")
+	target := filepath.Join(targetDir, "target.txt")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Create: true}}, true)
+	if err == nil {
+		t.Fatal("Apply() error = nil, want error")
+	}
+	if got, want := len(result.Entries), 1; got != want {
+		t.Fatalf("len(Result.Entries) = %d, want %d", got, want)
+	}
+	if got, want := result.Entries[0].Status, output.StatusFailed; got != want {
+		t.Fatalf("Result.Entries[0].Status = %q, want %q", got, want)
 	}
 }

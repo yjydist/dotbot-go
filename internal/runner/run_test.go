@@ -192,6 +192,77 @@ func TestRunCheckValidatesWithoutApplying(t *testing.T) {
 	}
 }
 
+func TestRunCheckFailsOnExistingTargetConflict(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "dotbot-go.toml")
+	if err := os.MkdirAll(filepath.Join(baseDir, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(baseDir, "git", "gitconfig"), []byte("[user]"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	if err := os.WriteFile(filepath.Join(homeDir, ".gitconfig"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	contents := strings.Join([]string{
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"git/gitconfig\"",
+		"create = true",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := Run([]string{"--check"}, &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run(check) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "target exists and force=false") {
+		t.Fatalf("stderr = %q, want conflict error", stderr.String())
+	}
+	if strings.Contains(stdout.String(), "check ok") {
+		t.Fatalf("stdout = %q, should not report check ok", stdout.String())
+	}
+}
+
+func TestRunQuietStillPrintsFailure(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "dotbot-go.toml")
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	contents := strings.Join([]string{
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"missing/gitconfig\"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := Run([]string{"--quiet"}, &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run(quiet) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "[fail]") {
+		t.Fatalf("stdout = %q, want failure line", stdout.String())
+	}
+}
+
 func TestRunVerboseShowsConfigDetails(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "dotbot-go.toml")

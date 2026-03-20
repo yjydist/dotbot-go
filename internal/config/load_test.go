@@ -154,3 +154,29 @@ func TestLoadRejectsMissingRequiredFields(t *testing.T) {
 		t.Fatalf("Load() error = %v, want required field error", err)
 	}
 }
+
+func TestLoadRejectsInvalidDefaultCreateMode(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, DefaultConfigName)
+	contents := strings.Join([]string{
+		"[default.create]",
+		"mode = \"invalid\"",
+		"",
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"git/gitconfig\"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load(LoadOptions{Path: configPath, WorkingDir: baseDir, HomeDir: baseDir})
+	if err == nil {
+		t.Fatal("Load() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "[default.create].mode") {
+		t.Fatalf("Load() error = %v, want default.create.mode path", err)
+	}
+}
