@@ -127,7 +127,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 
 - 不传 `-c` 时, 默认读取当前工作目录下的 `dotbot-go.toml`
 - `--verbose` 和 `--quiet` 互斥
-- `--verbose` 会额外输出配置文件路径, 基准目录, 以及阶段统计
+- `--verbose` 会额外输出配置文件路径, 基准目录, 默认值摘要, 以及阶段统计
 
 ## 推荐目录结构
 
@@ -272,6 +272,7 @@ dry-run 输出应该尽量回答这些问题:
 输出原则:
 
 - dry-run 和真实执行尽量使用一致的单行格式
+- 默认输出使用解析后的最终路径, 便于直接定位实际文件系统位置
 - 每一行都应包含阶段, 动作对象, 以及结果或决策
 - `skip` 必须带原因
 - 执行结束后应输出摘要统计
@@ -279,19 +280,28 @@ dry-run 输出应该尽量回答这些问题:
 普通执行示例:
 
 ```text
-[ok] create  ~/.cache/zsh                             created
-[ok] link    ~/.gitconfig <- /repo/git/gitconfig     linked
-[info] clean   ~                                      scan dead symlinks
+[ok] create  /Users/example/.cache/zsh               created
+[ok] link    /Users/example/.gitconfig <- /repo/git/gitconfig linked
+[info] clean   /Users/example                        scan dead symlinks
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
 示例:
 
 ```text
-[dry-run] create  ~/.cache/zsh                         create
-[dry-run] link    ~/.gitconfig <- ./git/gitconfig     create symlink
-[dry-run] clean   ~                                    scan dead symlinks
+[dry-run] create  /Users/example/.cache/zsh           create
+[dry-run] link    /Users/example/.gitconfig <- /repo/git/gitconfig create symlink
+[dry-run] clean   /Users/example                      scan dead symlinks
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
+```
+
+`--verbose` 还会在动作列表之前输出额外上下文, 例如:
+
+```text
+config: /repo/dotbot-go.toml
+base dir: /repo
+defaults: link(create=true relink=true force=false relative=true ignore_missing=false) create(mode=0755) clean(force=false recursive=false)
+stages: create=1 link=1 clean=1
 ```
 
 ## 与 Dotbot 的关系

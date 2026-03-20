@@ -184,6 +184,9 @@ func TestRunVerboseShowsConfigDetails(t *testing.T) {
 	if !strings.Contains(stdout.String(), "config:") {
 		t.Fatalf("stdout = %q, want config details", stdout.String())
 	}
+	if !strings.Contains(stdout.String(), "defaults:") {
+		t.Fatalf("stdout = %q, want defaults summary", stdout.String())
+	}
 	if !strings.Contains(stdout.String(), "stages:") {
 		t.Fatalf("stdout = %q, want stage summary", stdout.String())
 	}

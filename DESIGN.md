@@ -699,6 +699,7 @@ dry-run 必须按内部固定阶段输出, 即:
 - 输出所有默认信息
 - 额外输出配置文件路径
 - 额外输出配置基准目录
+- 额外输出默认值摘要
 - 额外输出阶段数量摘要
 
 #### `--quiet`
@@ -749,9 +750,9 @@ paths = ["~"]
 期望 dry-run 输出:
 
 ```text
-[dry-run] create  ~/.cache/zsh                         create
-[dry-run] link    ~/.gitconfig <- ./git/gitconfig     create symlink
-[dry-run] clean   ~                                    scan dead symlinks
+[dry-run] create  /Users/example/.cache/zsh           create
+[dry-run] link    /Users/example/.gitconfig <- /repo/git/gitconfig create symlink
+[dry-run] clean   /Users/example                      scan dead symlinks
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
@@ -762,10 +763,11 @@ summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```text
 config: /repo/dotbot-go.toml
 base dir: /repo
+defaults: link(create=true relink=true force=false relative=true ignore_missing=false) create(mode=0755) clean(force=false recursive=false)
 stages: create=1 link=1 clean=1
-[ok] create  ~/.cache/zsh                             created
+[ok] create  /Users/example/.cache/zsh               created
 [ok] link    ~/.gitconfig <- /repo/git/gitconfig     linked
-[info] clean   ~                                      scan dead symlinks
+[info] clean   /Users/example                        scan dead symlinks
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
@@ -783,7 +785,7 @@ ignore_missing = true
 期望 dry-run 输出:
 
 ```text
-[dry-run] link    ~/.config/ghostty/config <- ./ghostty/config   skip (source missing, ignore_missing=true)
+[dry-run] link    /Users/example/.config/ghostty/config <- /repo/ghostty/config skipped (source missing, ignore_missing=true)
 summary: created=0 linked=0 skipped=1 replaced=0 deleted=0 failed=0
 ```
 
@@ -801,7 +803,7 @@ force = true
 期望 dry-run 输出:
 
 ```text
-[dry-run] link    ~/.tmux.conf <- ./tmux/tmux.conf    replace (force=true)
+[dry-run] link    /Users/example/.tmux.conf <- /repo/tmux/tmux.conf replace (force=true)
 summary: created=0 linked=0 skipped=0 replaced=1 deleted=0 failed=0
 ```
 
@@ -817,7 +819,7 @@ paths = ["~/.cache/nonexistent"]
 期望 dry-run 输出:
 
 ```text
-[dry-run] clean   ~/.cache/nonexistent                 skip (path missing)
+[dry-run] clean   /Users/example/.cache/nonexistent   skipped (path missing)
 summary: created=0 linked=0 skipped=1 replaced=0 deleted=0 failed=0
 ```
 

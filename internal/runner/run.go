@@ -63,6 +63,16 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if opts.OutputMode == output.ModeVerbose {
 		fmt.Fprintf(stdout, "config: %s\n", cfg.Path)
 		fmt.Fprintf(stdout, "base dir: %s\n", cfg.BaseDir)
+		fmt.Fprintf(stdout, "defaults: link(create=%t relink=%t force=%t relative=%t ignore_missing=%t) create(mode=%#o) clean(force=%t recursive=%t)\n",
+			cfg.Default.Link.Create,
+			cfg.Default.Link.Relink,
+			cfg.Default.Link.Force,
+			cfg.Default.Link.Relative,
+			cfg.Default.Link.IgnoreMissing,
+			cfg.Default.Create.Mode,
+			cfg.Default.Clean.Force,
+			cfg.Default.Clean.Recursive,
+		)
 		fmt.Fprintf(stdout, "stages: create=%d link=%d clean=%d\n", len(cfg.Create.Paths), len(cfg.Links), len(cfg.Clean.Paths))
 	}
 
