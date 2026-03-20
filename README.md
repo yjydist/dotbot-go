@@ -115,7 +115,7 @@ dotbot-go -c dotbot-go.toml
 dotbot-go --dry-run -c dotbot-go.toml
 ```
 
-第一版计划支持的 CLI 参数:
+当前支持的 CLI 参数:
 
 - `-c`, `--config`
 - `--check`
@@ -354,4 +354,4 @@ stages: create=1 link=1 clean=1
 
 ## License
 
-TBD
+MIT

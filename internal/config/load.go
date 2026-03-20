@@ -146,7 +146,7 @@ func Load(opts LoadOptions) (*Config, error) {
 	var raw rawConfig
 	meta, err := toml.DecodeFile(configPath, &raw)
 	if err != nil {
-		return nil, fmt.Errorf("decode config: %w", err)
+		return nil, configError("config", fmt.Sprintf("decode config: %v", err))
 	}
 	if err := validateUndecoded(meta); err != nil {
 		return nil, err

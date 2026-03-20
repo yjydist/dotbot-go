@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 )
@@ -32,5 +33,31 @@ func TestFormatEntryWithColor(t *testing.T) {
 	got := FormatEntry(Options{EnableColor: true}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
 	if !strings.Contains(got, "\x1b[") {
 		t.Fatalf("FormatEntry() = %q, want ANSI color code", got)
+	}
+}
+
+func TestWriteEntriesQuietOnlyPrintsFailure(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteEntries(&buf, Options{Mode: ModeQuiet}, []Entry{
+		{Stage: "create", Target: "/tmp/a", Decision: "created", Status: StatusCreated},
+		{Stage: "link", Target: "/tmp/b", Decision: "failed", Status: StatusFailed, Message: "boom"},
+	})
+	got := buf.String()
+	if strings.Contains(got, "created") {
+		t.Fatalf("WriteEntries() = %q, should not include success entry", got)
+	}
+	if !strings.Contains(got, "[fail]") {
+		t.Fatalf("WriteEntries() = %q, want failure entry", got)
+	}
+}
+
+func TestFormatEntryNoColor(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{EnableColor: false}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
+	if strings.Contains(got, "\x1b[") {
+		t.Fatalf("FormatEntry() = %q, should not include ANSI color code", got)
 	}
 }
