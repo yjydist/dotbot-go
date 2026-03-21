@@ -27,6 +27,24 @@ func TestFormatEntry(t *testing.T) {
 	}
 }
 
+func TestFormatEntryDryRunFailureUsesFailPrefix(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{DryRun: true}, Entry{
+		Stage:    "link",
+		Target:   "~/.gitconfig",
+		Decision: "failed",
+		Status:   StatusFailed,
+		Message:  "target exists and force=false",
+	})
+	if !strings.Contains(got, "[fail]") {
+		t.Fatalf("FormatEntry() = %q, want fail prefix even in dry-run", got)
+	}
+	if strings.Contains(got, "[dry-run]") {
+		t.Fatalf("FormatEntry() = %q, should not use dry-run prefix for failure", got)
+	}
+}
+
 func TestFormatEntryWithColor(t *testing.T) {
 	t.Parallel()
 
@@ -146,6 +164,31 @@ func TestWriteReviewTextShowsAllowedRiskState(t *testing.T) {
 
 	if got := buf.String(); !strings.Contains(got, "已通过当前命令放行") {
 		t.Fatalf("WriteReviewText() = %q, want allowed risk hint", got)
+	}
+}
+
+func TestWriteReviewTextVerboseFiltersInactiveStages(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{Mode: ModeVerbose}, ReviewData{
+		Mode:        ReviewModeDryRun,
+		ConfigPath:  "/repo/dotbot-go.toml",
+		BaseDir:     "/repo",
+		StageCounts: StageCounts{Link: 1},
+		VerboseLines: []string{
+			"link: create=false relink=false force=false relative=false ignore_missing=false",
+			"create: mode=0777",
+			"clean: force=true recursive=true",
+		},
+	})
+
+	got := buf.String()
+	if !strings.Contains(got, "link: create=false") {
+		t.Fatalf("WriteReviewText() = %q, want active link summary", got)
+	}
+	if strings.Contains(got, "create: mode=0777") || strings.Contains(got, "clean: force=true") {
+		t.Fatalf("WriteReviewText() = %q, should not include inactive stage summaries", got)
 	}
 }
 

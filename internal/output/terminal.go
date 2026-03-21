@@ -28,14 +28,14 @@ func WriteSummary(w io.Writer, opts Options, summary Summary) {
 // FormatEntry 负责把单条执行记录格式化成统一的终端输出.
 func FormatEntry(opts Options, entry Entry) string {
 	prefix := "[ok]"
-	if opts.DryRun {
+	if entry.Status == StatusFailed {
+		prefix = "[fail]"
+	} else if opts.DryRun {
 		prefix = "[dry-run]"
 	} else if entry.Status == StatusInfo {
 		prefix = "[info]"
 	} else if entry.Status == StatusSkipped {
 		prefix = "[skip]"
-	} else if entry.Status == StatusFailed {
-		prefix = "[fail]"
 	}
 	prefix = colorize(prefix, entry.Status, opts)
 	object := entry.Target
@@ -82,14 +82,14 @@ func colorize(prefix string, status Status, opts Options) string {
 	}
 	color := ""
 	switch {
+	case status == StatusFailed:
+		color = "31"
 	case opts.DryRun:
 		color = "36"
 	case status == StatusInfo:
 		color = "34"
 	case status == StatusSkipped:
 		color = "33"
-	case status == StatusFailed:
-		color = "31"
 	default:
 		color = "32"
 	}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/yjydist/dotbot-go/internal/output"
@@ -71,4 +72,24 @@ func TestWrapTextRespectsDisplayWidthForCJK(t *testing.T) {
 			t.Fatalf("displayWidth(%q) = %d, want <= 10", line, got)
 		}
 	}
+}
+
+func TestReviewOverviewTableWrapsLongValuesIntoSeparateRows(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(sampleDryRunReviewData(), true)
+	model.width = 84
+	model.height = 24
+
+	view := model.renderOverviewTable([]tableRow{
+		{Label: "config file", Value: "/very/long/config/path/for/testing/dotbot-go.toml"},
+	}, contentWidth(model.styles.panel, model.bodyWidth()))
+
+	if !strings.Contains(view, "config file") {
+		t.Fatalf("renderOverviewTable() = %q, want label row", view)
+	}
+	if strings.Contains(view, "config file\n") {
+		t.Fatalf("renderOverviewTable() = %q, should keep one-line rows for bubbles table", view)
+	}
+	assertRenderedWithinWidth(t, view, contentWidth(model.styles.panel, model.bodyWidth()))
 }

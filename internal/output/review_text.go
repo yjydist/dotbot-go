@@ -31,7 +31,7 @@ func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 		}
 	}
 	if opts.Mode == ModeVerbose {
-		for _, line := range data.VerboseLines {
+		for _, line := range ActiveVerboseLines(data.VerboseLines, data.StageCounts) {
 			fmt.Fprintf(w, "  %s\n", line)
 		}
 	}
@@ -119,4 +119,30 @@ func padDisplay(value string, width int) string {
 
 func displayWidth(value string) int {
 	return runewidth.StringWidth(value)
+}
+
+// ActiveVerboseLines 过滤掉本次运行不会参与执行的阶段配置摘要.
+func ActiveVerboseLines(lines []string, counts StageCounts) []string {
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "link:"):
+			if counts.Link > 0 {
+				filtered = append(filtered, line)
+			}
+		case strings.HasPrefix(line, "create:"):
+			if counts.Create > 0 {
+				filtered = append(filtered, line)
+			}
+		case strings.HasPrefix(line, "clean:"):
+			if counts.Clean > 0 {
+				filtered = append(filtered, line)
+			}
+		default:
+			if line != "" {
+				filtered = append(filtered, line)
+			}
+		}
+	}
+	return filtered
 }

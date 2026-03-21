@@ -159,28 +159,7 @@ func (m reviewModel) renderCheckPanel() string {
 }
 
 func (m reviewModel) effectiveConfigLines() []string {
-	lines := make([]string, 0, len(m.data.VerboseLines))
-	for _, line := range m.data.VerboseLines {
-		switch {
-		case strings.HasPrefix(line, "link:"):
-			if m.data.StageCounts.Link > 0 {
-				lines = append(lines, line)
-			}
-		case strings.HasPrefix(line, "create:"):
-			if m.data.StageCounts.Create > 0 {
-				lines = append(lines, line)
-			}
-		case strings.HasPrefix(line, "clean:"):
-			if m.data.StageCounts.Clean > 0 {
-				lines = append(lines, line)
-			}
-		default:
-			if line != "" {
-				lines = append(lines, line)
-			}
-		}
-	}
-	return lines
+	return output.ActiveVerboseLines(m.data.VerboseLines, m.data.StageCounts)
 }
 
 // effectiveConfigRows 会把 link/create/clean 的配置摘要展开成字段级行.
@@ -247,10 +226,10 @@ func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 		if len(valueLines) == 0 {
 			valueLines = []string{"-"}
 		}
-		tableRows = append(tableRows, table.Row{
-			row.Label,
-			strings.Join(valueLines, "\n"),
-		})
+		tableRows = append(tableRows, table.Row{row.Label, valueLines[0]})
+		for _, line := range valueLines[1:] {
+			tableRows = append(tableRows, table.Row{"", line})
+		}
 	}
 
 	tbl := table.New(
