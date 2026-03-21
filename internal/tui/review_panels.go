@@ -57,7 +57,11 @@ func (m reviewModel) renderRiskPanel() string {
 	} else {
 		lines = append(lines, m.styles.riskBadge.Render(fmt.Sprintf("%d 项风险", len(m.data.Risks))))
 		for _, risk := range m.data.Risks {
-			lines = append(lines, wrapBullet(fmt.Sprintf("%s: %s", risk.Kind, risk.Path), innerWidth))
+			label := fmt.Sprintf("%s: %s", risk.Kind, risk.Path)
+			if risk.Allowed {
+				label += " (已放行)"
+			}
+			lines = append(lines, wrapBullet(label, innerWidth))
 		}
 	}
 	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))
@@ -134,9 +138,21 @@ func (m reviewModel) renderCheckPanel() string {
 		m.styles.panelTitle.Render("结果"),
 		statusStyle(m.styles, output.StatusCreated).Render(strings.ToUpper(m.data.Result)),
 	}
-	if len(m.data.Risks) > 0 {
+	actionableRisks := 0
+	allowedRisks := 0
+	for _, risk := range m.data.Risks {
+		if risk.Allowed {
+			allowedRisks++
+		} else {
+			actionableRisks++
+		}
+	}
+	switch {
+	case actionableRisks > 0:
 		lines = append(lines, m.styles.muted.Render("存在高风险项, 正式执行时仍需确认或显式 override"))
-	} else {
+	case allowedRisks > 0:
+		lines = append(lines, m.styles.muted.Render("存在高风险项, 但已由当前命令的 override 显式放行"))
+	default:
 		lines = append(lines, m.styles.muted.Render("配置和关键前置检查通过"))
 	}
 	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))

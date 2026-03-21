@@ -84,8 +84,9 @@ type StageCounts struct {
 
 // RiskItem 是审阅界面和确认界面共用的风险展示模型.
 type RiskItem struct {
-	Kind string
-	Path string
+	Kind    string
+	Path    string
+	Allowed bool
 }
 
 // ReviewData 是 dry-run/check 在文本和 TUI 两种视图下共享的数据模型.

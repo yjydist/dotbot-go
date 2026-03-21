@@ -36,3 +36,22 @@ func TestConfirmModelRejectsEscape(t *testing.T) {
 		t.Fatalf("View() = %q, want confirmation title", result.View())
 	}
 }
+
+func TestConfirmModelSupportsScrolling(t *testing.T) {
+	t.Parallel()
+
+	var risks []output.RiskItem
+	for i := 0; i < 20; i++ {
+		risks = append(risks, output.RiskItem{Kind: "replace protected target", Path: "/tmp/path"})
+	}
+	model := newConfirmModel(risks, true)
+	model.height = 12
+	model.viewport.Height = model.viewportHeight()
+	model.viewport.SetContent(model.renderContent())
+
+	updated, _ := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+	afterDown := updated.(confirmModel)
+	if afterDown.viewport.YOffset == 0 {
+		t.Fatal("YOffset = 0, want scroll down after j")
+	}
+}

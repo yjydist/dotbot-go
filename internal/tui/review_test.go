@@ -165,3 +165,30 @@ func TestReviewModelKeepsMixedLinkSummaryAsSingleOverviewValue(t *testing.T) {
 		t.Fatalf("View() = %q, should keep mixed summary as one row", view)
 	}
 }
+
+func TestReviewModelShowsAllowedRiskState(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(output.ReviewData{
+		Mode:       output.ReviewModeCheck,
+		ConfigPath: "/repo/dotbot-go.toml",
+		BaseDir:    "/repo",
+		Risks: []output.RiskItem{
+			{Kind: "replace protected target", Path: "/tmp/a", Allowed: true},
+		},
+		Result: "check ok",
+	}, true)
+	model.width = 120
+	model.height = 40
+	model.viewport.Width = model.bodyWidth()
+	model.viewport.Height = model.viewportHeight()
+	model.viewport.SetContent(model.renderContent())
+
+	view := model.View()
+	if !strings.Contains(view, "已放行") {
+		t.Fatalf("View() = %q, want allowed risk marker", view)
+	}
+	if !strings.Contains(view, "已由当前命令的 override 显式放行") {
+		t.Fatalf("View() = %q, want allowed check result hint", view)
+	}
+}

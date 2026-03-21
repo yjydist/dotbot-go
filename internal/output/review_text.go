@@ -23,7 +23,11 @@ func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 	} else {
 		fmt.Fprintf(w, "  risks: %d\n", len(data.Risks))
 		for _, risk := range data.Risks {
-			fmt.Fprintf(w, "    - %s: %s\n", risk.Kind, risk.Path)
+			suffix := ""
+			if risk.Allowed {
+				suffix = " (已通过当前命令放行)"
+			}
+			fmt.Fprintf(w, "    - %s: %s%s\n", risk.Kind, risk.Path, suffix)
 		}
 	}
 	if opts.Mode == ModeVerbose {

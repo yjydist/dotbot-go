@@ -78,13 +78,21 @@ func collectRiskyCleanRoots(roots, protectedRoots []string) []string {
 }
 
 // collectRiskItems 用于 dry-run/check 审阅界面, 它不会考虑 override 是否已显式放行.
-func collectRiskItems(protectedTargets, riskyCleanRoots []string) []output.RiskItem {
+func collectRiskItems(opts Options, protectedTargets, riskyCleanRoots []string) []output.RiskItem {
 	items := make([]output.RiskItem, 0, len(protectedTargets)+len(riskyCleanRoots))
 	for _, target := range protectedTargets {
-		items = append(items, output.RiskItem{Kind: "replace protected target", Path: target})
+		items = append(items, output.RiskItem{
+			Kind:    "replace protected target",
+			Path:    target,
+			Allowed: opts.AllowProtectedTarget,
+		})
 	}
 	for _, root := range riskyCleanRoots {
-		items = append(items, output.RiskItem{Kind: "risky clean root", Path: root})
+		items = append(items, output.RiskItem{
+			Kind:    "risky clean root",
+			Path:    root,
+			Allowed: opts.AllowRiskyClean,
+		})
 	}
 	return items
 }

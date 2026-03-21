@@ -112,8 +112,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	reviewRisks := collectConfirmRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
-	confirmRisks := reviewRisks
+	reviewRisks := collectRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
+	confirmRisks := collectConfirmRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
 	if !opts.DryRun && !opts.Check && interactiveTerminal(stdin, stdout) && len(confirmRisks) > 0 {
 		if err := runConfirmUI(stdin, stdout, opts.NoColor, confirmRisks); err != nil {
 			fmt.Fprintln(stderr, err)

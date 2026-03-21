@@ -135,6 +135,20 @@ func TestWriteReviewTextCheck(t *testing.T) {
 	}
 }
 
+func TestWriteReviewTextShowsAllowedRiskState(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{}, ReviewData{
+		Mode:  ReviewModeCheck,
+		Risks: []RiskItem{{Kind: "replace protected target", Path: "/tmp/a", Allowed: true}},
+	})
+
+	if got := buf.String(); !strings.Contains(got, "已通过当前命令放行") {
+		t.Fatalf("WriteReviewText() = %q, want allowed risk hint", got)
+	}
+}
+
 func TestDisplayWidthTreatsCJKAsTerminalCells(t *testing.T) {
 	t.Parallel()
 
