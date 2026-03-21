@@ -37,6 +37,19 @@
 - [x] 删除手写 `docs/release` 方案
 - [x] 增加 tag 触发的 GitHub release workflow
 
+## 当前流程收敛任务
+
+- [x] 将默认 Git workflow 从直接修改 `main` 收敛为分支开发后再合并
+
+## 当前 TUI 实现任务
+
+- [x] 为 `--dry-run` 增加交互审阅界面与文本回退
+- [x] 为 `--check` 增加摘要审阅界面与文本回退
+- [x] 将高风险确认统一到 Bubble Tea 界面
+- [x] 重构 `runner/output` 的展示分流逻辑
+- [x] 同步 `README.md` 和 `DESIGN.md` 的交互说明
+- [x] 补齐 TUI 与文本回退测试
+
 ## 第一轮实现任务
 
 - [x] 初始化 Go 项目骨架

@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"github.com/yjydist/dotbot-go/internal/creator"
 	"github.com/yjydist/dotbot-go/internal/linker"
 	"github.com/yjydist/dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/tui"
 )
 
 const (
@@ -32,6 +32,12 @@ type Options struct {
 	AllowProtectedTarget bool
 	AllowRiskyClean      bool
 }
+
+var (
+	interactiveTerminal = isInteractive
+	runReviewUI         = tui.RunReview
+	runConfirmUI        = tui.RunConfirm
+)
 
 // Run 是 dotbot-go 的主执行入口.
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -69,30 +75,22 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitConfig
 	}
 
-	if opts.OutputMode == output.ModeVerbose {
-		fmt.Fprintf(stdout, "config: %s\n", cfg.Path)
-		fmt.Fprintf(stdout, "base dir: %s\n", cfg.BaseDir)
-		fmt.Fprintf(stdout, "defaults: link(create=%t relink=%t force=%t relative=%t ignore_missing=%t) create(mode=%#o) clean(force=%t recursive=%t)\n",
-			cfg.Default.Link.Create,
-			cfg.Default.Link.Relink,
-			cfg.Default.Link.Force,
-			cfg.Default.Link.Relative,
-			cfg.Default.Link.IgnoreMissing,
-			cfg.Default.Create.Mode,
-			cfg.Default.Clean.Force,
-			cfg.Default.Clean.Recursive,
-		)
-		fmt.Fprintf(stdout, "stages: create=%d link=%d clean=%d\n", len(cfg.Create.Paths), len(cfg.Links), len(cfg.Clean.Paths))
-	}
+	showReviewUI := shouldUseReviewUI(opts, stdin, stdout)
+	verboseLines := buildVerboseLines(*cfg)
 	outOpts := output.Options{
 		Mode:        opts.OutputMode,
 		DryRun:      opts.DryRun,
 		EnableColor: output.ColorEnabled(stdout, opts.NoColor),
 	}
+	if opts.OutputMode == output.ModeVerbose && !showReviewUI && !opts.DryRun && !opts.Check {
+		for _, line := range buildVerboseReport(*cfg) {
+			fmt.Fprintln(stdout, line)
+		}
+	}
 
 	dryRun := opts.DryRun || opts.Check
 	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, dryRun)
-	if !opts.Check {
+	if !opts.Check && !opts.DryRun {
 		output.WriteEntries(stdout, outOpts, createResult.Entries)
 	}
 	if err != nil {
@@ -111,8 +109,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	if !opts.DryRun && !opts.Check && isInteractive(stdin, stdout) && (len(riskyProtectedTargets) > 0 || len(riskyCleanRoots) > 0) {
-		if err := confirmTargets(stdin, stdout, riskyProtectedTargets, riskyCleanRoots); err != nil {
+	reviewRisks := collectRiskItems(riskyProtectedTargets, riskyCleanRoots)
+	confirmRisks := collectConfirmRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
+	if !opts.DryRun && !opts.Check && interactiveTerminal(stdin, stdout) && len(confirmRisks) > 0 {
+		if err := runConfirmUI(stdin, stdout, opts.NoColor, confirmRisks); err != nil {
 			fmt.Fprintln(stderr, err)
 			return exitRuntime
 		}
@@ -122,7 +122,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		ProtectedTargets:     protectedTargets,
 		AllowProtectedTarget: allowProtectedTarget,
 	})
-	if !opts.Check {
+	if !opts.Check && !opts.DryRun {
 		output.WriteEntries(stdout, outOpts, linkResult.Entries)
 	}
 	if err != nil {
@@ -134,7 +134,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		ProtectedRoots:  protectedRoots,
 		AllowRiskyClean: allowRiskyClean,
 	})
-	if !opts.Check {
+	if !opts.Check && !opts.DryRun {
 		output.WriteEntries(stdout, outOpts, cleanResult.Entries)
 	}
 	if err != nil {
@@ -152,9 +152,44 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	for _, entry := range cleanResult.Entries {
 		summary.Add(entry.Status)
 	}
+
+	reviewData := output.ReviewData{
+		ConfigPath:   cfg.Path,
+		BaseDir:      cfg.BaseDir,
+		StageCounts:  output.StageCounts{Create: len(cfg.Create.Paths), Link: len(cfg.Links), Clean: len(cfg.Clean.Paths)},
+		Entries:      collectReviewEntries(createResult.Entries, linkResult.Entries, cleanResult.Entries),
+		Risks:        reviewRisks,
+		Summary:      summary,
+		VerboseLines: verboseLines,
+	}
+
 	if opts.Check {
+		reviewData.Mode = output.ReviewModeCheck
+		reviewData.Result = "check ok"
 		if opts.OutputMode != output.ModeQuiet {
-			fmt.Fprintln(stdout, "check ok")
+			if showReviewUI {
+				if err := runReviewUI(stdin, stdout, opts.NoColor, reviewData); err != nil {
+					fmt.Fprintln(stderr, err)
+					return exitRuntime
+				}
+			} else {
+				output.WriteReviewText(stdout, outOpts, reviewData)
+			}
+		}
+		return exitSuccess
+	}
+
+	if opts.DryRun {
+		reviewData.Mode = output.ReviewModeDryRun
+		if opts.OutputMode != output.ModeQuiet {
+			if showReviewUI {
+				if err := runReviewUI(stdin, stdout, opts.NoColor, reviewData); err != nil {
+					fmt.Fprintln(stderr, err)
+					return exitRuntime
+				}
+			} else {
+				output.WriteReviewText(stdout, outOpts, reviewData)
+			}
 		}
 		return exitSuccess
 	}
@@ -241,6 +276,11 @@ func writeHelp(w io.Writer) {
 	fmt.Fprintln(w, "      --allow-risky-clean       允许高风险 clean 根路径, 高风险")
 	fmt.Fprintln(w, "  -h, --help            显示帮助")
 	fmt.Fprintln(w)
+	fmt.Fprintln(w, "交互模式:")
+	fmt.Fprintln(w, "  交互终端中, --dry-run 和 --check 会自动进入审阅界面")
+	fmt.Fprintln(w, "  非交互环境会回退为纯文本输出")
+	fmt.Fprintln(w, "  --quiet 不进入审阅界面")
+	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Path rules:")
 	fmt.Fprintln(w, "  source 相对路径基于配置文件目录解析")
 	fmt.Fprintln(w, "  target 相对路径基于当前工作目录解析")
@@ -252,7 +292,7 @@ func resolveProtectedTargetAllowance(stdin io.Reader, stdout io.Writer, opts Opt
 	if len(riskyTargets) == 0 || opts.DryRun || opts.Check || opts.AllowProtectedTarget {
 		return opts.AllowProtectedTarget, riskyTargets, nil
 	}
-	if !isInteractive(stdin, stdout) {
+	if !interactiveTerminal(stdin, stdout) {
 		return false, nil, fmt.Errorf("runtime error: protected target requires confirmation or --allow-protected-target: %s", riskyTargets[0])
 	}
 	return true, riskyTargets, nil
@@ -263,7 +303,7 @@ func resolveRiskyCleanAllowance(stdin io.Reader, stdout io.Writer, opts Options,
 	if len(riskyRoots) == 0 || opts.DryRun || opts.Check || opts.AllowRiskyClean {
 		return opts.AllowRiskyClean, riskyRoots, nil
 	}
-	if !isInteractive(stdin, stdout) {
+	if !interactiveTerminal(stdin, stdout) {
 		return false, nil, fmt.Errorf("runtime error: risky clean requires confirmation or --allow-risky-clean: %s", riskyRoots[0])
 	}
 	return true, riskyRoots, nil
@@ -310,28 +350,73 @@ func collectRiskyCleanRoots(roots, protectedRoots []string) []string {
 	return risky
 }
 
-func confirmTargets(stdin io.Reader, stdout io.Writer, protectedTargets, riskyCleanRoots []string) error {
-	if len(protectedTargets) == 0 && len(riskyCleanRoots) == 0 {
-		return nil
-	}
-	reader := bufio.NewReader(stdin)
-	fmt.Fprintln(stdout, "detected risky operations:")
+func collectRiskItems(protectedTargets, riskyCleanRoots []string) []output.RiskItem {
+	items := make([]output.RiskItem, 0, len(protectedTargets)+len(riskyCleanRoots))
 	for _, target := range protectedTargets {
-		fmt.Fprintf(stdout, "- replace protected target: %s\n", target)
+		items = append(items, output.RiskItem{Kind: "replace protected target", Path: target})
 	}
 	for _, root := range riskyCleanRoots {
-		fmt.Fprintf(stdout, "- risky clean root: %s\n", root)
+		items = append(items, output.RiskItem{Kind: "risky clean root", Path: root})
 	}
-	fmt.Fprint(stdout, "continue anyway? [y/N]: ")
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("runtime error: confirmation input: %w", err)
+	return items
+}
+
+func collectConfirmRiskItems(opts Options, protectedTargets, riskyCleanRoots []string) []output.RiskItem {
+	items := make([]output.RiskItem, 0, len(protectedTargets)+len(riskyCleanRoots))
+	if !opts.AllowProtectedTarget {
+		for _, target := range protectedTargets {
+			items = append(items, output.RiskItem{Kind: "replace protected target", Path: target})
+		}
 	}
-	answer := strings.ToLower(strings.TrimSpace(line))
-	if answer != "y" && answer != "yes" {
-		return fmt.Errorf("runtime error: confirmation rejected")
+	if !opts.AllowRiskyClean {
+		for _, root := range riskyCleanRoots {
+			items = append(items, output.RiskItem{Kind: "risky clean root", Path: root})
+		}
 	}
-	return nil
+	return items
+}
+
+func collectReviewEntries(groups ...[]output.Entry) []output.Entry {
+	var entries []output.Entry
+	for _, group := range groups {
+		entries = append(entries, group...)
+	}
+	return entries
+}
+
+func shouldUseReviewUI(opts Options, stdin io.Reader, stdout io.Writer) bool {
+	if opts.OutputMode == output.ModeQuiet {
+		return false
+	}
+	if !opts.DryRun && !opts.Check {
+		return false
+	}
+	return interactiveTerminal(stdin, stdout)
+}
+
+func buildVerboseLines(cfg config.Config) []string {
+	return []string{
+		fmt.Sprintf("defaults: link(create=%t relink=%t force=%t relative=%t ignore_missing=%t) create(mode=%#o) clean(force=%t recursive=%t)",
+			cfg.Default.Link.Create,
+			cfg.Default.Link.Relink,
+			cfg.Default.Link.Force,
+			cfg.Default.Link.Relative,
+			cfg.Default.Link.IgnoreMissing,
+			cfg.Default.Create.Mode,
+			cfg.Default.Clean.Force,
+			cfg.Default.Clean.Recursive,
+		),
+	}
+}
+
+func buildVerboseReport(cfg config.Config) []string {
+	lines := []string{
+		fmt.Sprintf("config: %s", cfg.Path),
+		fmt.Sprintf("base dir: %s", cfg.BaseDir),
+	}
+	lines = append(lines, buildVerboseLines(cfg)...)
+	lines = append(lines, fmt.Sprintf("stages: create=%d link=%d clean=%d", len(cfg.Create.Paths), len(cfg.Links), len(cfg.Clean.Paths)))
+	return lines
 }
 
 func isInteractive(stdin io.Reader, stdout io.Writer) bool {

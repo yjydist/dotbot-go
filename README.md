@@ -131,10 +131,11 @@ dotbot-go --dry-run -c dotbot-go.toml
 - 不传 `-c` 时, 默认读取当前工作目录下的 `dotbot-go.toml`
 - `--check` 只校验配置和关键运行前条件, 不修改文件系统
 - `--verbose` 和 `--quiet` 互斥
-- `--verbose` 会额外输出配置文件路径, 基准目录, 默认值摘要, 以及阶段统计
+- 交互终端里, `--dry-run` 和 `--check` 会自动进入审阅界面; 非交互环境回退为纯文本输出
+- `--verbose` 会在审阅界面或文本回退中额外展示默认值摘要
 - 终端环境下默认允许彩色输出, `--no-color` 可关闭
-- 命中受保护目标时, 交互环境会先汇总风险项再做一次 `y/N` 确认, 非交互环境需显式传入 `--allow-protected-target`
-- 命中高风险 clean 根路径时, 交互环境会先汇总风险项再做一次 `y/N` 确认, 非交互环境需显式传入 `--allow-risky-clean`
+- 命中受保护目标时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-protected-target`
+- 命中高风险 clean 根路径时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-risky-clean`
 
 ## 推荐目录结构
 
@@ -211,7 +212,7 @@ dotfiles/
 - `force` 优先级高于 `relink`
 - `force = true` 表示用户接受覆盖风险
 - `force = true` 可覆盖普通文件, 目录, 或符号链接
-- 命中受保护目标时, 交互环境会把风险项汇总后一次确认, 非交互环境需显式传入 `--allow-protected-target`
+- 命中受保护目标时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-protected-target`
 - `ignore_missing = true` 时, 缺失 `source` 会被跳过而不是报错
 
 ### `[create]`
@@ -237,7 +238,7 @@ dotfiles/
 
 - 默认只清理 dead target 解析后仍位于仓库基准目录内的失效链接
 - `force = true` 时, 允许清理 dead target 位于仓库基准目录外的失效链接
-- `clean.paths` 如果命中高风险根路径, 交互环境会把风险项汇总后一次确认, 非交互环境需显式传入 `--allow-risky-clean`
+- `clean.paths` 如果命中高风险根路径, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-risky-clean`
 
 ### `[default.*]`
 
@@ -272,7 +273,7 @@ dotfiles/
 - 失败即停
 - 不承诺回滚
 - `force = true` 的覆盖风险由用户承担
-- 真正高风险的覆盖和清理行为会先列出全部风险项, 再在交互环境做一次 `y/N` 确认, 或在非交互环境要求显式 override 参数
+- 真正高风险的覆盖和清理行为会先列出全部风险项, 再在交互环境进入确认界面, 或在非交互环境要求显式 override 参数
 
 如果你只想做纯校验, 可以使用:
 
@@ -280,24 +281,21 @@ dotfiles/
 dotbot-go --check -c dotbot-go.toml
 ```
 
-## Dry Run
+## Dry Run 与 Check
 
-`dotbot-go` 会把 dry-run 作为核心能力之一.
+`dotbot-go` 会把 `--dry-run` 和 `--check` 作为核心审阅能力.
 
-dry-run 输出应该尽量回答这些问题:
+交互终端中:
 
-- 这一步来自哪个配置段
-- 将执行什么操作
-- 目标路径是什么
-- 是否会覆盖, 跳过或报错
+- `--dry-run` 会自动进入 Bubble Tea 审阅界面, 展示配置概览, 风险区, 计划动作表格和摘要
+- `--check` 会自动进入摘要型审阅界面, 展示配置概览, 风险区和最终结论
+- `--verbose` 会在界面中额外展示默认值摘要
 
-输出原则:
+非交互环境中:
 
-- dry-run 和真实执行尽量使用一致的单行格式
-- 默认输出使用解析后的最终路径, 便于直接定位实际文件系统位置
-- 每一行都应包含阶段, 动作对象, 以及结果或决策
-- `skip` 必须带原因
-- 执行结束后应输出摘要统计
+- `--dry-run` 回退为纯文本表格输出
+- `--check` 回退为纯文本摘要输出
+- 所有输出都适合重定向, 管道和 CI 日志采集
 
 普通执行示例:
 
@@ -308,22 +306,32 @@ dry-run 输出应该尽量回答这些问题:
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
-示例:
+`--dry-run` 的非交互文本回退示例:
 
 ```text
-[dry-run] create  /Users/example/.cache/zsh           create
-[dry-run] link    /Users/example/.gitconfig <- /repo/git/gitconfig create symlink
-[dry-run] clean   /Users/example                      scan dead symlinks
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=1 link=1 clean=1
+  risks: none
+
+阶段   | 目标                         | 来源                 | 动作             | 备注
+-----+----------------------------+--------------------+----------------+---
+create | /Users/example/.cache/zsh   | -                  | create         | -
+link   | /Users/example/.gitconfig   | /repo/git/gitconfig | create symlink | -
+clean  | /Users/example              | -                  | scan dead symlinks | -
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
-`--verbose` 还会在动作列表之前输出额外上下文, 例如:
+`--check` 的非交互文本回退示例:
 
 ```text
-config: /repo/dotbot-go.toml
-base dir: /repo
-defaults: link(create=true relink=true force=false relative=true ignore_missing=false) create(mode=0755) clean(force=false recursive=false)
-stages: create=1 link=1 clean=1
+check:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=1 link=1 clean=1
+  risks: none
+  result: check ok
 ```
 
 ## 与 Dotbot 的关系
