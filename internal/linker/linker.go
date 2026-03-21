@@ -17,8 +17,9 @@ type Result struct {
 }
 
 type ApplyOptions struct {
-	DryRun           bool
-	ProtectedTargets []string
+	DryRun               bool
+	ProtectedTargets     []string
+	AllowProtectedTarget bool
 }
 
 func Apply(links []config.LinkConfig, opts ApplyOptions) (Result, error) {
@@ -180,15 +181,18 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	entry.Decision = "replaced"
 	entry.Status = output.StatusReplaced
 	entry.Message = "force=true"
-	if isProtectedTarget(link.Target, opts.ProtectedTargets) {
-		entry.Decision = string(output.StatusFailed)
-		entry.Status = output.StatusFailed
-		entry.Message = "target is protected and cannot be replaced"
-		return entry, change{}, false, fmt.Errorf("target is protected and cannot be replaced: %s", link.Target)
-	}
 	if opts.DryRun {
 		entry.Decision = "replace"
+		if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+			entry.Message = "protected target, confirmation required"
+		}
 		return entry, change{replaced: true}, false, nil
+	}
+	if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+		entry.Decision = string(output.StatusFailed)
+		entry.Status = output.StatusFailed
+		entry.Message = "protected target requires confirmation"
+		return entry, change{}, false, fmt.Errorf("protected target requires confirmation or --allow-protected-target: %s", link.Target)
 	}
 	if err := os.RemoveAll(link.Target); err != nil {
 		entry.Decision = string(output.StatusFailed)

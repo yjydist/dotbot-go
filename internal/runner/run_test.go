@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ func TestRunHelp(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--help"}, &stdout, &stderr), 0; got != want {
+	if got, want := run([]string{"--help"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(help) = %d, want %d", got, want)
 	}
 	if !strings.Contains(stdout.String(), "dotbot-go") {
@@ -29,7 +30,7 @@ func TestRunRejectsVerboseQuietTogether(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--verbose", "--quiet"}, &stdout, &stderr), 2; got != want {
+	if got, want := run([]string{"--verbose", "--quiet"}, strings.NewReader(""), &stdout, &stderr), 2; got != want {
 		t.Fatalf("Run(verbose+quiet) = %d, want %d", got, want)
 	}
 	if !strings.Contains(stderr.String(), "cannot be used together") {
@@ -64,7 +65,7 @@ func TestRunLoadsDefaultConfig(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run(nil, &stdout, &stderr), 0; got != want {
+	if got, want := run(nil, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "[ok]") {
@@ -105,7 +106,7 @@ func TestRunDryRunOutputsPlan(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--dry-run"}, &stdout, &stderr), 0; got != want {
+	if got, want := run([]string{"--dry-run"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(dry-run) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "[dry-run]") {
@@ -143,7 +144,7 @@ func TestRunQuietSuppressesSuccessOutput(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--quiet"}, &stdout, &stderr), 0; got != want {
+	if got, want := run([]string{"--quiet"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(quiet) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if stdout.Len() != 0 {
@@ -178,7 +179,7 @@ func TestRunCheckValidatesWithoutApplying(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--check"}, &stdout, &stderr), 0; got != want {
+	if got, want := run([]string{"--check"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(check) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "check ok") {
@@ -223,7 +224,7 @@ func TestRunCheckFailsOnExistingTargetConflict(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--check"}, &stdout, &stderr), 1; got != want {
+	if got, want := run([]string{"--check"}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
 		t.Fatalf("Run(check) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stderr.String(), "target exists and force=false") {
@@ -255,7 +256,7 @@ func TestRunQuietStillPrintsFailure(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--quiet"}, &stdout, &stderr), 1; got != want {
+	if got, want := run([]string{"--quiet"}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
 		t.Fatalf("Run(quiet) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "[fail]") {
@@ -290,7 +291,7 @@ func TestRunVerboseShowsConfigDetails(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run([]string{"--verbose"}, &stdout, &stderr), 0; got != want {
+	if got, want := run([]string{"--verbose"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(verbose) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "config:") {
@@ -310,10 +311,133 @@ func TestRunMissingConfigReturnsConfigError(t *testing.T) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	if got, want := Run(nil, &stdout, &stderr), 2; got != want {
+	if got, want := run(nil, strings.NewReader(""), &stdout, &stderr), 2; got != want {
 		t.Fatalf("Run() = %d, want %d", got, want)
 	}
 	if !strings.Contains(stderr.String(), "decode config") {
 		t.Fatalf("stderr = %q, want decode config error", stderr.String())
+	}
+}
+
+func TestRunRejectsProtectedTargetWithoutOverrideInNonInteractiveMode(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "dotbot-go.toml")
+	source := filepath.Join(baseDir, "source.txt")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	contents := strings.Join([]string{
+		"[[link]]",
+		fmt.Sprintf("target = %q", baseDir),
+		fmt.Sprintf("source = %q", source),
+		"force = true",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run(nil, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--allow-protected-target") {
+		t.Fatalf("stderr = %q, want protected target override error", stderr.String())
+	}
+}
+
+func TestRunAllowsProtectedTargetWithOverride(t *testing.T) {
+	baseDir := t.TempDir()
+	parentDir := t.TempDir()
+	configPath := filepath.Join(parentDir, "dotbot-go.toml")
+	source := filepath.Join(parentDir, "source.txt")
+	protectedTarget := filepath.Join(parentDir, "protected")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(protectedTarget, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	contents := strings.Join([]string{
+		"[[link]]",
+		fmt.Sprintf("target = %q", protectedTarget),
+		fmt.Sprintf("source = %q", source),
+		"force = true",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", configPath, "--allow-protected-target"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if _, err := os.Readlink(protectedTarget); err != nil {
+		t.Fatalf("protected target is not symlink: %v", err)
+	}
+}
+
+func TestRunDryRunMarksProtectedTargetConfirmation(t *testing.T) {
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "dotbot-go.toml")
+	source := filepath.Join(baseDir, "source.txt")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	contents := strings.Join([]string{
+		"[[link]]",
+		fmt.Sprintf("target = %q", baseDir),
+		fmt.Sprintf("source = %q", source),
+		"force = true",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--dry-run"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "protected target, confirmation required") {
+		t.Fatalf("stdout = %q, want protected target confirmation hint", stdout.String())
+	}
+}
+
+func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
+	baseDir := t.TempDir()
+	configDir := t.TempDir()
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	root := homeDir
+	linkPath := filepath.Join(root, "dead-link")
+	if err := os.Symlink(filepath.Join(configDir, "missing.txt"), linkPath); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "dotbot-go.toml")
+	contents := strings.Join([]string{
+		"[clean]",
+		fmt.Sprintf("paths = [%q]", root),
+		"force = true",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", configPath, "--allow-risky-clean"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if _, err := os.Lstat(linkPath); !os.IsNotExist(err) {
+		t.Fatalf("dead link still exists, err=%v", err)
 	}
 }

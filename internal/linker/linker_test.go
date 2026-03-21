@@ -134,3 +134,28 @@ func TestApplyForceRejectsProtectedTarget(t *testing.T) {
 		t.Fatalf("Stat(%q) error = %v, want protected target kept", target, statErr)
 	}
 }
+
+func TestApplyDryRunMarksProtectedTargetConfirmation(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(baseDir, "target-dir")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, ApplyOptions{
+		DryRun:           true,
+		ProtectedTargets: []string{target},
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if got, want := result.Entries[0].Message, "protected target, confirmation required"; got != want {
+		t.Fatalf("Result.Entries[0].Message = %q, want %q", got, want)
+	}
+}

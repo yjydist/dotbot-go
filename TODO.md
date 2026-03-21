@@ -22,6 +22,13 @@
 - [x] 同步 `README.md` 和 `DESIGN.md` 的实现细节
 - [x] 整理发布说明到 `docs/release`
 
+## 下一版设计任务
+
+- [x] 定稿 `link force` 与 `clean force` 的风险分级方案
+- [x] 定稿交互确认与非交互 override 的行为边界
+- [x] 按新设计实现 CLI 风险确认流程
+- [x] 同步 README 和示例到新风险确认语义
+
 ## 第一轮实现任务
 
 - [x] 初始化 Go 项目骨架
