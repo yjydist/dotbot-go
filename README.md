@@ -132,7 +132,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 - `--check` 只校验配置和关键运行前条件, 不修改文件系统
 - `--verbose` 和 `--quiet` 互斥
 - 交互终端里, `--dry-run` 和 `--check` 会自动进入审阅界面; 非交互环境回退为纯文本输出
-- `--verbose` 会在审阅界面或文本回退中额外展示默认值摘要
+- `--verbose` 会在文本回退中额外展示生效配置摘要
 - 终端环境下默认允许彩色输出, `--no-color` 可关闭
 - 命中受保护目标时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-protected-target`
 - 命中高风险 clean 根路径时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-risky-clean`
@@ -287,9 +287,9 @@ dotbot-go --check -c dotbot-go.toml
 
 交互终端中:
 
-- `--dry-run` 会自动进入 Bubble Tea 审阅界面, 展示配置概览, 风险区, 计划动作表格和摘要
-- `--check` 会自动进入摘要型审阅界面, 展示配置概览, 风险区和最终结论
-- `--verbose` 会在界面中额外展示默认值摘要
+- `--dry-run` 会自动进入 Bubble Tea 审阅界面, 展示包含 `config file` 绝对路径, `base dir`, 生效配置表格, 风险区, 卡片式计划列表和摘要的概览
+- `--check` 会自动进入摘要型审阅界面, 展示包含 `config file` 绝对路径, `base dir`, 生效配置表格, 风险区和最终结论的概览
+- 文本回退下, `--verbose` 会额外输出生效配置摘要
 
 非交互环境中:
 
@@ -333,6 +333,14 @@ check:
   risks: none
   result: check ok
 ```
+
+如果你要重复做 TUI 手工验收, 可以直接使用:
+
+```sh
+scripts/tui-check.sh commands
+```
+
+它会自动准备固定夹具, 并打印 `dry-run` / `check` / `risky` / 非交互回退这几组可直接执行的命令.
 
 ## 与 Dotbot 的关系
 

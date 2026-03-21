@@ -652,7 +652,7 @@ dry-run 必须按内部固定阶段输出, 即:
 - 配置路径与 base dir
 - 阶段统计
 - 风险列表
-- 按阶段分组的计划动作表格
+- 更适合长路径阅读的卡片式计划列表
 - 摘要统计
 
 非交互环境回退为纯文本表格, 推荐格式:
@@ -723,7 +723,7 @@ summary: created=1 linked=1 skipped=1 replaced=0 deleted=1 failed=0
 #### `--verbose`
 
 - 普通执行模式下保持原有额外文本信息
-- 审阅界面和文本回退中额外展示默认值摘要
+- 审阅界面展示当前实际生效配置, 文本回退在 `--verbose` 下额外展示生效配置摘要
 - 不再要求在 `--dry-run` / `--check` 前单独打印一段前置文本块
 
 #### `--quiet`
@@ -794,7 +794,7 @@ summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 期望行为:
 
 - 自动进入审阅界面
-- 默认展示配置路径, base dir, 阶段统计, 风险列表和动作表格
+- 默认展示 `config file` 绝对路径, `base dir`, 阶段统计, 实际生效配置表格, 风险列表和卡片式计划列表
 - `q` / `esc` 退出界面
 
 #### 示例 1c: verbose 输出
@@ -802,7 +802,9 @@ summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 期望 verbose 额外内容:
 
 ```text
-defaults: link(create=true relink=true force=false relative=true ignore_missing=false) create(mode=0755) clean(force=false recursive=false)
+link: create=true relink=true force=false relative=true ignore_missing=false
+create: mode=0755
+clean: force=false recursive=false
 ```
 
 #### 示例 2: 跳过缺失 source
@@ -1143,7 +1145,7 @@ Flags:
   -c, --config <path>   配置文件路径, 默认: ./dotbot-go.toml
       --check           仅校验配置和关键运行前条件
       --dry-run         仅展示计划动作, 不修改文件系统
-      --verbose         输出配置路径, 默认值摘要, 阶段统计
+      --verbose         输出配置路径, 生效配置摘要, 阶段统计
       --quiet           仅输出失败信息, 不输出成功和摘要
       --no-color        关闭彩色输出
   -h, --help            显示帮助

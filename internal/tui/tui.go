@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -15,48 +15,77 @@ import (
 const (
 	defaultWidth  = 100
 	defaultHeight = 28
+	minBodyWidth  = 56
+	maxBodyWidth  = 128
 )
 
 type styles struct {
-	doc       lipgloss.Style
-	header    lipgloss.Style
-	subtitle  lipgloss.Style
-	section   lipgloss.Style
-	content   lipgloss.Style
-	footer    lipgloss.Style
-	risk      lipgloss.Style
-	success   lipgloss.Style
-	muted     lipgloss.Style
-	key       lipgloss.Style
-	tableWrap lipgloss.Style
+	doc           lipgloss.Style
+	title         lipgloss.Style
+	subtitle      lipgloss.Style
+	panel         lipgloss.Style
+	panelTitle    lipgloss.Style
+	muted         lipgloss.Style
+	key           lipgloss.Style
+	stageBadge    lipgloss.Style
+	modeBadge     lipgloss.Style
+	riskBadge     lipgloss.Style
+	safeBadge     lipgloss.Style
+	statusOk      lipgloss.Style
+	statusWarn    lipgloss.Style
+	statusError   lipgloss.Style
+	statusInfo    lipgloss.Style
+	card          lipgloss.Style
+	fieldLabel    lipgloss.Style
+	confirmPanel  lipgloss.Style
+	confirmRisk   lipgloss.Style
+	summaryMetric lipgloss.Style
 }
 
 func newStyles(noColor bool) styles {
 	base := styles{
-		doc:       lipgloss.NewStyle().Padding(1, 2),
-		header:    lipgloss.NewStyle().Bold(true),
-		subtitle:  lipgloss.NewStyle().Bold(true),
-		section:   lipgloss.NewStyle().Bold(true).Underline(true),
-		content:   lipgloss.NewStyle(),
-		footer:    lipgloss.NewStyle().Italic(true),
-		risk:      lipgloss.NewStyle().Bold(true),
-		success:   lipgloss.NewStyle().Bold(true),
-		muted:     lipgloss.NewStyle().Faint(true),
-		key:       lipgloss.NewStyle().Bold(true),
-		tableWrap: lipgloss.NewStyle(),
+		doc:           lipgloss.NewStyle().Padding(1, 2),
+		title:         lipgloss.NewStyle().Bold(true),
+		subtitle:      lipgloss.NewStyle().Faint(true),
+		panel:         lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1),
+		panelTitle:    lipgloss.NewStyle().Bold(true),
+		muted:         lipgloss.NewStyle().Faint(true),
+		key:           lipgloss.NewStyle().Bold(true),
+		stageBadge:    lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		modeBadge:     lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		riskBadge:     lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		safeBadge:     lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		statusOk:      lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		statusWarn:    lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		statusError:   lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		statusInfo:    lipgloss.NewStyle().Bold(true).Padding(0, 1),
+		card:          lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1),
+		fieldLabel:    lipgloss.NewStyle().Bold(true),
+		confirmPanel:  lipgloss.NewStyle().BorderStyle(lipgloss.DoubleBorder()).Padding(0, 1),
+		confirmRisk:   lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).Padding(0, 1),
+		summaryMetric: lipgloss.NewStyle().BorderStyle(lipgloss.RoundedBorder()).Padding(0, 1),
 	}
 	if noColor {
 		return base
 	}
-	base.header = base.header.Foreground(lipgloss.Color("212"))
-	base.subtitle = base.subtitle.Foreground(lipgloss.Color("69"))
-	base.section = base.section.Foreground(lipgloss.Color("39"))
-	base.footer = base.footer.Foreground(lipgloss.Color("244"))
-	base.risk = base.risk.Foreground(lipgloss.Color("203"))
-	base.success = base.success.Foreground(lipgloss.Color("42"))
-	base.muted = base.muted.Foreground(lipgloss.Color("246"))
+	base.title = base.title.Foreground(lipgloss.Color("212"))
+	base.subtitle = base.subtitle.Foreground(lipgloss.Color("246"))
+	base.panel = base.panel.BorderForeground(lipgloss.Color("240"))
+	base.panelTitle = base.panelTitle.Foreground(lipgloss.Color("39"))
 	base.key = base.key.Foreground(lipgloss.Color("220"))
-	base.tableWrap = base.tableWrap.BorderStyle(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color("240")).Padding(0, 1)
+	base.stageBadge = base.stageBadge.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("62"))
+	base.modeBadge = base.modeBadge.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("63"))
+	base.riskBadge = base.riskBadge.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("160"))
+	base.safeBadge = base.safeBadge.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("34"))
+	base.statusOk = base.statusOk.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("35"))
+	base.statusWarn = base.statusWarn.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("172"))
+	base.statusError = base.statusError.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("160"))
+	base.statusInfo = base.statusInfo.Foreground(lipgloss.Color("230")).Background(lipgloss.Color("31"))
+	base.card = base.card.BorderForeground(lipgloss.Color("238"))
+	base.fieldLabel = base.fieldLabel.Foreground(lipgloss.Color("69"))
+	base.confirmPanel = base.confirmPanel.BorderForeground(lipgloss.Color("203"))
+	base.confirmRisk = base.confirmRisk.BorderForeground(lipgloss.Color("203"))
+	base.summaryMetric = base.summaryMetric.BorderForeground(lipgloss.Color("241"))
 	return base
 }
 
@@ -66,9 +95,9 @@ type reviewModel struct {
 	viewport viewport.Model
 	width    int
 	height   int
-	ready    bool
 }
 
+// newReviewModel 构造 dry-run / check 共用的只读审阅界面.
 func newReviewModel(data output.ReviewData, noColor bool) reviewModel {
 	m := reviewModel{
 		data:   data,
@@ -76,9 +105,8 @@ func newReviewModel(data output.ReviewData, noColor bool) reviewModel {
 		width:  defaultWidth,
 		height: defaultHeight,
 	}
-	m.viewport = viewport.New(defaultWidth-6, defaultHeight-10)
+	m.viewport = viewport.New(m.bodyWidth(), m.viewportHeight())
 	m.viewport.SetContent(m.renderContent())
-	m.ready = true
 	return m
 }
 
@@ -91,14 +119,26 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = max(msg.Width, 60)
 		m.height = max(msg.Height, 16)
-		m.viewport.Width = max(m.width-6, 40)
-		m.viewport.Height = max(m.height-10, 6)
+		m.viewport.Width = m.bodyWidth()
+		m.viewport.Height = m.viewportHeight()
 		m.viewport.SetContent(m.renderContent())
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
+		case "g", "home":
+			m.viewport.GotoTop()
+			return m, nil
+		case "G", "end":
+			m.viewport.GotoBottom()
+			return m, nil
+		case "j":
+			m.viewport.ScrollDown(1)
+			return m, nil
+		case "k":
+			m.viewport.ScrollUp(1)
+			return m, nil
 		}
 	}
 
@@ -108,157 +148,49 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m reviewModel) View() string {
-	var footer string
-	switch m.data.Mode {
-	case output.ReviewModeDryRun:
-		footer = fmt.Sprintf("%s/%s 或方向键滚动, %s 退出", m.styles.key.Render("j"), m.styles.key.Render("k"), m.styles.key.Render("q"))
-	case output.ReviewModeCheck:
-		footer = fmt.Sprintf("%s 退出", m.styles.key.Render("q"))
+	titleLine := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.styles.modeBadge.Render(reviewTitle(m.data.Mode)),
+		" ",
+		m.styles.title.Render(filepath.Base(m.data.ConfigPath)),
+	)
+
+	footer := m.styles.muted.Render(fmt.Sprintf("%s 退出", m.styles.key.Render("q")))
+	if m.data.Mode == output.ReviewModeDryRun {
+		footer = m.styles.muted.Render(
+			fmt.Sprintf(
+				"%s/%s 滚动  •  %s/%s 顶部底部  •  %s 退出",
+				m.styles.key.Render("j"),
+				m.styles.key.Render("k"),
+				m.styles.key.Render("g"),
+				m.styles.key.Render("G"),
+				m.styles.key.Render("q"),
+			),
+		)
 	}
 
 	parts := []string{
-		m.styles.header.Render(reviewTitle(m.data.Mode)),
-		m.styles.subtitle.Render(fmt.Sprintf("config: %s", m.data.ConfigPath)),
-		m.styles.subtitle.Render(fmt.Sprintf("base dir: %s", m.data.BaseDir)),
+		titleLine,
+		m.styles.subtitle.Render(m.headerSummary()),
 		m.viewport.View(),
-		m.styles.footer.Render(footer),
+		footer,
 	}
-	return m.styles.doc.Width(max(m.width-2, 58)).Render(strings.Join(parts, "\n\n"))
+	return renderSized(m.styles.doc, m.bodyWidth()+m.styles.doc.GetHorizontalFrameSize(), strings.Join(parts, "\n\n"))
 }
 
-func (m reviewModel) renderContent() string {
-	lines := []string{
-		m.styles.section.Render("概览"),
-		fmt.Sprintf("阶段数量: create=%d link=%d clean=%d", m.data.StageCounts.Create, m.data.StageCounts.Link, m.data.StageCounts.Clean),
-	}
-	if len(m.data.VerboseLines) > 0 {
-		lines = append(lines, m.data.VerboseLines...)
-	}
+func (m reviewModel) bodyWidth() int {
+	return clamp(m.width-8, minBodyWidth, maxBodyWidth)
+}
 
-	lines = append(lines, "", m.styles.section.Render("风险"))
-	if len(m.data.Risks) == 0 {
-		lines = append(lines, m.styles.success.Render("无风险项"))
-	} else {
-		for _, risk := range m.data.Risks {
-			lines = append(lines, m.styles.risk.Render(fmt.Sprintf("- %s: %s", risk.Kind, risk.Path)))
-		}
-	}
+func (m reviewModel) viewportHeight() int {
+	return max(m.height-8, 6)
+}
 
+func (m reviewModel) headerSummary() string {
 	switch m.data.Mode {
-	case output.ReviewModeDryRun:
-		lines = append(lines, "", m.styles.section.Render("计划动作"))
-		table := output.RenderEntryTable(m.data.Entries)
-		lines = append(lines, m.styles.tableWrap.Width(max(m.viewport.Width, 40)).Render(table))
-		lines = append(lines, "", m.styles.section.Render("摘要"))
-		lines = append(lines, fmt.Sprintf("created=%d linked=%d skipped=%d replaced=%d deleted=%d failed=%d",
-			m.data.Summary.Created,
-			m.data.Summary.Linked,
-			m.data.Summary.Skipped,
-			m.data.Summary.Replaced,
-			m.data.Summary.Deleted,
-			m.data.Summary.Failed,
-		))
 	case output.ReviewModeCheck:
-		lines = append(lines, "", m.styles.section.Render("结果"))
-		lines = append(lines, m.styles.success.Render(m.data.Result))
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-type confirmModel struct {
-	risks     []output.RiskItem
-	styles    styles
-	confirmed bool
-}
-
-func newConfirmModel(risks []output.RiskItem, noColor bool) confirmModel {
-	return confirmModel{
-		risks:  risks,
-		styles: newStyles(noColor),
-	}
-}
-
-func (m confirmModel) Init() tea.Cmd {
-	return nil
-}
-
-func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter", "y":
-			m.confirmed = true
-			return m, tea.Quit
-		case "esc", "q", "n", "ctrl+c":
-			return m, tea.Quit
-		}
-	}
-	return m, nil
-}
-
-func (m confirmModel) View() string {
-	lines := []string{
-		m.styles.header.Render("detected risky operations"),
-		"",
-	}
-	for _, risk := range m.risks {
-		lines = append(lines, m.styles.risk.Render(fmt.Sprintf("- %s: %s", risk.Kind, risk.Path)))
-	}
-	lines = append(lines,
-		"",
-		m.styles.footer.Render(fmt.Sprintf("%s 确认, %s 取消", m.styles.key.Render("Enter"), m.styles.key.Render("Esc"))),
-	)
-	return m.styles.doc.Render(strings.Join(lines, "\n"))
-}
-
-func RunReview(stdin io.Reader, stdout io.Writer, noColor bool, data output.ReviewData) error {
-	model := newReviewModel(data, noColor)
-	_, err := tea.NewProgram(
-		model,
-		tea.WithInput(stdin),
-		tea.WithOutput(stdout),
-		tea.WithAltScreen(),
-	).Run()
-	if err != nil {
-		return fmt.Errorf("runtime error: review ui: %w", err)
-	}
-	return nil
-}
-
-func RunConfirm(stdin io.Reader, stdout io.Writer, noColor bool, risks []output.RiskItem) error {
-	model := newConfirmModel(risks, noColor)
-	finalModel, err := tea.NewProgram(
-		model,
-		tea.WithInput(stdin),
-		tea.WithOutput(stdout),
-		tea.WithAltScreen(),
-	).Run()
-	if err != nil {
-		return fmt.Errorf("runtime error: confirmation ui: %w", err)
-	}
-	result, ok := finalModel.(confirmModel)
-	if !ok {
-		return fmt.Errorf("runtime error: confirmation ui: unexpected result")
-	}
-	if !result.confirmed {
-		return fmt.Errorf("runtime error: confirmation rejected")
-	}
-	return nil
-}
-
-func reviewTitle(mode output.ReviewMode) string {
-	switch mode {
-	case output.ReviewModeCheck:
-		return "check review"
+		return fmt.Sprintf("校验预览  •  风险 %d 项", len(m.data.Risks))
 	default:
-		return "dry-run review"
+		return fmt.Sprintf("计划动作 %d 项  •  风险 %d 项", len(m.data.Entries), len(m.data.Risks))
 	}
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
