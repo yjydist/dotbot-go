@@ -20,7 +20,6 @@
 - [x] 修复 `link force` 的危险目标覆盖护栏
 - [x] 收紧 `clean` 根路径与保守清理边界
 - [x] 同步 `README.md` 和 `DESIGN.md` 的实现细节
-- [x] 整理发布说明到 `docs/release`
 
 ## 下一版设计任务
 
@@ -33,9 +32,10 @@
 
 - [x] 准备 `force` / `clean` 风险确认的手工验收夹具
 
-## 当前发布文档任务
+## 当前自动化任务
 
-- [x] 补充 `v0.1.1` release 文档
+- [x] 删除手写 `docs/release` 方案
+- [x] 增加 tag 触发的 GitHub release workflow
 
 ## 第一轮实现任务
 

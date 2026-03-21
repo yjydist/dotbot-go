@@ -1,0 +1,48 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build release notes
+        id: notes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_tag="${GITHUB_REF_NAME}"
+          prev_tag="$(git tag --sort=version:refname | grep -Fxv "${current_tag}" | tail -n1 || true)"
+
+          {
+            echo "## Changes"
+            echo
+            if [[ -n "${prev_tag}" ]]; then
+              git log --reverse --pretty='- %s' "${prev_tag}..${current_tag}"
+            else
+              git log --reverse --pretty='- %s' "${current_tag}"
+            fi
+          } > release_notes.md
+
+          {
+            echo "path=release_notes.md"
+            echo "previous_tag=${prev_tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: ${{ steps.notes.outputs.path }}
