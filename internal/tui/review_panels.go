@@ -77,7 +77,7 @@ func (m reviewModel) renderEntrySection() string {
 
 	cards := make([]string, 0, len(m.data.Entries)+1)
 	cards = append(cards, m.styles.panelTitle.Render("计划动作"))
-	cardWidth := clamp(m.bodyWidth()-4, 52, m.bodyWidth())
+	cardWidth := reviewCardWidth(m.bodyWidth())
 	for i, entry := range m.data.Entries {
 		cards = append(cards, m.renderEntryCard(i+1, entry, cardWidth))
 	}
@@ -213,8 +213,11 @@ func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 			labelWidth = w
 		}
 	}
-	labelWidth = clamp(labelWidth, 8, 20)
-	valueWidth := max(width-labelWidth-8, 16)
+	maxLabelWidth := max(width/3, 1)
+	if labelWidth > maxLabelWidth {
+		labelWidth = maxLabelWidth
+	}
+	valueWidth := max(width-labelWidth-7, 1)
 
 	columns := []table.Column{
 		{Title: "字段", Width: labelWidth},
@@ -248,4 +251,15 @@ func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 	tbl.Blur()
 	tbl.SetWidth(width)
 	return tbl.View()
+}
+
+func reviewCardWidth(bodyWidth int) int {
+	width := bodyWidth - 4
+	if width < 12 {
+		return bodyWidth
+	}
+	if width > bodyWidth {
+		return bodyWidth
+	}
+	return width
 }

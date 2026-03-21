@@ -33,7 +33,7 @@ func TestReviewModelPanelsStayWithinWidth(t *testing.T) {
 	assertRenderedWithinWidth(t, model.renderOverviewPanel(), model.bodyWidth())
 	assertRenderedWithinWidth(t, model.renderRiskPanel(), model.bodyWidth())
 	assertRenderedWithinWidth(t, model.renderSummaryPanel(), model.bodyWidth())
-	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], clamp(model.bodyWidth()-4, 52, model.bodyWidth())), clamp(model.bodyWidth()-4, 52, model.bodyWidth()))
+	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], reviewCardWidth(model.bodyWidth())), reviewCardWidth(model.bodyWidth()))
 }
 
 func TestReviewModelPanelsStayWithinWidthWithCJK(t *testing.T) {
@@ -60,7 +60,7 @@ func TestReviewModelPanelsStayWithinWidthWithCJK(t *testing.T) {
 
 	assertRenderedWithinWidth(t, model.renderOverviewPanel(), model.bodyWidth())
 	assertRenderedWithinWidth(t, model.renderRiskPanel(), model.bodyWidth())
-	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], clamp(model.bodyWidth()-4, 52, model.bodyWidth())), clamp(model.bodyWidth()-4, 52, model.bodyWidth()))
+	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], reviewCardWidth(model.bodyWidth())), reviewCardWidth(model.bodyWidth()))
 }
 
 func TestWrapTextRespectsDisplayWidthForCJK(t *testing.T) {
@@ -92,4 +92,27 @@ func TestReviewOverviewTableWrapsLongValuesIntoSeparateRows(t *testing.T) {
 		t.Fatalf("renderOverviewTable() = %q, should keep one-line rows for bubbles table", view)
 	}
 	assertRenderedWithinWidth(t, view, contentWidth(model.styles.panel, model.bodyWidth()))
+}
+
+func TestReviewPanelsStayWithinVeryNarrowWidth(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(sampleDryRunReviewData(), true)
+	model.data.ConfigPath = "/very/long/config/path/for/testing/dotbot-go.toml"
+	model.data.BaseDir = "/very/long/base/dir/for/testing"
+	model.data.Entries = []output.Entry{
+		{
+			Stage:    "link",
+			Target:   "/very/long/target/path/that/needs/to/wrap/without/breaking/the/card/border/example.toml",
+			Source:   "/very/long/source/path/that/also/needs/to/wrap/without/breaking/the/card/border/example.toml",
+			Decision: "replace existing path with new symlink",
+			Status:   output.StatusReplaced,
+			Message:  "protected target, confirmation required",
+		},
+	}
+	model.width = 50
+	model.height = 12
+
+	assertRenderedWithinWidth(t, model.renderOverviewPanel(), model.bodyWidth())
+	assertRenderedWithinWidth(t, model.renderEntrySection(), model.bodyWidth())
 }
