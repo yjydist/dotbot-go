@@ -138,3 +138,30 @@ func TestReviewModelSupportsNavigationKeys(t *testing.T) {
 		t.Fatal("viewport not at top after g")
 	}
 }
+
+func TestReviewModelKeepsMixedLinkSummaryAsSingleOverviewValue(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(output.ReviewData{
+		Mode:        output.ReviewModeDryRun,
+		ConfigPath:  "/repo/dotbot-go.toml",
+		BaseDir:     "/repo",
+		StageCounts: output.StageCounts{Link: 2},
+		VerboseLines: []string{
+			"link: mixed per-link values",
+		},
+	}, true)
+	model.width = 120
+	model.height = 40
+	model.viewport.Width = model.bodyWidth()
+	model.viewport.Height = model.viewportHeight()
+	model.viewport.SetContent(model.renderContent())
+
+	view := model.View()
+	if !strings.Contains(view, "mixed per-link values") {
+		t.Fatalf("View() = %q, want mixed link summary", view)
+	}
+	if strings.Contains(view, "link   per-link") || strings.Contains(view, "link   values") {
+		t.Fatalf("View() = %q, should keep mixed summary as one row", view)
+	}
+}

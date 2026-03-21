@@ -177,6 +177,10 @@ func (m reviewModel) effectiveConfigRows() []tableRow {
 			rows = append(rows, tableRow{Label: "config", Value: line})
 			continue
 		}
+		if !strings.Contains(value, "=") {
+			rows = append(rows, tableRow{Label: group, Value: value})
+			continue
+		}
 		fields := strings.Fields(value)
 		if len(fields) == 0 {
 			rows = append(rows, tableRow{Label: group, Value: "-"})

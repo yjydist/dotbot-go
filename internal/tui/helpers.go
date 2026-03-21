@@ -2,9 +2,9 @@ package tui
 
 import (
 	"strings"
-	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 
 	"github.com/yjydist/dotbot-go/internal/output"
 )
@@ -130,7 +130,7 @@ func wrapByDelimiter(value string, width int, delimiter string) []string {
 }
 
 func displayWidth(value string) int {
-	return utf8.RuneCountInString(value)
+	return runewidth.StringWidth(value)
 }
 
 func max(a, b int) int {
