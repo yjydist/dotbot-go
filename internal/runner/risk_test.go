@@ -94,6 +94,41 @@ func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
 	}
 }
 
+func TestRunRejectsRiskyCleanWithoutOverrideInNonInteractiveMode(t *testing.T) {
+	baseDir := t.TempDir()
+	configDir := t.TempDir()
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	linkPath := filepath.Join(homeDir, "dead-link")
+	if err := os.Symlink(filepath.Join(configDir, "missing.txt"), linkPath); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "dotbot-go.toml")
+	if err := os.WriteFile(configPath, []byte(strings.Join([]string{
+		"[clean]",
+		fmt.Sprintf("paths = [%q]", homeDir),
+		"force = true",
+	}, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", configPath}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "--allow-risky-clean") {
+		t.Fatalf("stderr = %q, want risky clean override error", stderr.String())
+	}
+	if _, err := os.Lstat(linkPath); err != nil {
+		t.Fatalf("dead link should remain after rejection, err=%v", err)
+	}
+}
+
 func TestRunUsesConfirmUIForRiskyOperationsWhenInteractive(t *testing.T) {
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
@@ -159,5 +194,86 @@ func TestRunSkipsConfirmUIWhenOverrideProvided(t *testing.T) {
 	var stderr bytes.Buffer
 	if got, want := run([]string{"--config", fixture.configPath, "--allow-protected-target"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+}
+
+func TestRunStopsWithoutSideEffectsWhenConfirmRejected(t *testing.T) {
+	fixture := newRunnerFixture(t, false)
+	source := filepath.Join(fixture.baseDir, "source.txt")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fixture.homeDir, []byte("boom"), 0o644); err == nil {
+		t.Fatal("expected write home dir to fail, fixture assumption broken")
+	}
+	withRunnerHooks(t,
+		func(io.Reader, io.Writer) bool { return true },
+		nil,
+		func(stdin io.Reader, stdout io.Writer, noColor bool, risks []output.RiskItem) error {
+			return fmt.Errorf("runtime error: confirmation rejected")
+		},
+	)
+
+	fixture.writeConfig(t,
+		"[[link]]",
+		fmt.Sprintf("target = %q", fixture.homeDir),
+		fmt.Sprintf("source = %q", source),
+		"force = true",
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", fixture.configPath}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "confirmation rejected") {
+		t.Fatalf("stderr = %q, want rejection error", stderr.String())
+	}
+	info, err := os.Stat(fixture.homeDir)
+	if err != nil {
+		t.Fatalf("Stat(homeDir) error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("homeDir should remain directory after rejection")
+	}
+}
+
+func TestRunLeavesDeadLinkWhenRiskyCleanConfirmRejected(t *testing.T) {
+	baseDir := t.TempDir()
+	configDir := t.TempDir()
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", homeDir)
+	linkPath := filepath.Join(homeDir, "dead-link")
+	if err := os.Symlink(filepath.Join(configDir, "missing.txt"), linkPath); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(configDir, "dotbot-go.toml")
+	if err := os.WriteFile(configPath, []byte(strings.Join([]string{
+		"[clean]",
+		fmt.Sprintf("paths = [%q]", homeDir),
+		"force = true",
+	}, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(baseDir)
+
+	withRunnerHooks(t,
+		func(io.Reader, io.Writer) bool { return true },
+		nil,
+		func(stdin io.Reader, stdout io.Writer, noColor bool, risks []output.RiskItem) error {
+			return fmt.Errorf("runtime error: confirmation rejected")
+		},
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", configPath}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if _, err := os.Lstat(linkPath); err != nil {
+		t.Fatalf("dead link should remain after rejection, err=%v", err)
 	}
 }

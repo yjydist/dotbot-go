@@ -219,3 +219,14 @@ func TestReviewModelShrinksToNarrowTerminal(t *testing.T) {
 		t.Fatalf("viewport height = %d, want <= 12", got)
 	}
 }
+
+func TestReviewModelViewStaysWithinNarrowTerminalWidth(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(sampleDryRunReviewData(), true)
+	model.data.ConfigPath = "/very/long/config/path/that/should/wrap/in/the/review/header/dotbot-go.toml"
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 24, Height: 12})
+	result := updated.(reviewModel)
+
+	assertRenderedWithinWidth(t, result.View(), 24)
+}

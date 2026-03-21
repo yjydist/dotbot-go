@@ -180,3 +180,53 @@ func TestLoadRejectsInvalidDefaultCreateMode(t *testing.T) {
 		t.Fatalf("Load() error = %v, want default.create.mode path", err)
 	}
 }
+
+func TestLoadResolvesCleanPathsAndMergesDefaults(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	workingDir := filepath.Join(baseDir, "work")
+	homeDir := filepath.Join(baseDir, "home")
+	if err := os.MkdirAll(workingDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(homeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configPath := filepath.Join(baseDir, DefaultConfigName)
+	contents := strings.Join([]string{
+		"[default.clean]",
+		"force = true",
+		"recursive = false",
+		"",
+		"[clean]",
+		"paths = [\"~/.config\", \"./cache\"]",
+		"recursive = true",
+		"",
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"./git/gitconfig\"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load(LoadOptions{Path: configPath, WorkingDir: workingDir, HomeDir: homeDir})
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if got, want := cfg.Clean.Paths[0], filepath.Join(homeDir, ".config"); got != want {
+		t.Fatalf("Clean.Paths[0] = %q, want %q", got, want)
+	}
+	if got, want := cfg.Clean.Paths[1], filepath.Join(workingDir, "cache"); got != want {
+		t.Fatalf("Clean.Paths[1] = %q, want %q", got, want)
+	}
+	if !cfg.Clean.Force {
+		t.Fatal("Clean.Force = false, want true from default.clean")
+	}
+	if !cfg.Clean.Recursive {
+		t.Fatal("Clean.Recursive = false, want true from [clean]")
+	}
+}

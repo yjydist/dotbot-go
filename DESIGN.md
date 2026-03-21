@@ -40,7 +40,7 @@
 | 失败策略 | 失败即停, 不承诺回滚 |
 | Dry Run | 必须展示阶段, 动作, 目标, 决策, 结果 |
 | 日志粒度 | 默认, `--verbose`, `--quiet` |
-| CLI 参数 | `-c/--config`, `--dry-run`, `--verbose`, `--quiet`, `--no-color`, `-h/--help` |
+| CLI 参数 | `-c/--config`, `--check`, `--dry-run`, `--verbose`, `--quiet`, `--no-color`, `--allow-protected-target`, `--allow-risky-clean`, `-h/--help` |
 | 纯校验能力 | `--check` |
 | 退出码 | `0` 成功, `1` 运行时错误, `2` 配置错误 |
 | 第一版平台 | macOS 和 Linux |
@@ -970,7 +970,7 @@ config error: [[link]][1].source: required field is missing
 
 ### 5. 交互确认流程
 
-仅当 stdout/stderr/stdin 处于 TTY 交互环境时启用交互确认.
+仅当 stdin 和 stdout 同时处于 TTY 交互环境时启用交互确认.
 
 确认规则:
 
@@ -982,11 +982,16 @@ config error: [[link]][1].source: required field is missing
 建议交互内容:
 
 ```text
-detected risky operations:
+DANGER 高风险操作确认
+
+本次执行命中了高风险操作。
+风险项数量: 2
+输入 y 才会继续执行覆盖或清理动作, 取消则本次执行直接终止。
+
 - replace protected target: /absolute/target
 - risky clean root: /absolute/path
 
-Enter 确认, Esc 取消
+y 确认, Esc 取消
 ```
 
 如果用户未确认:
@@ -1078,6 +1083,8 @@ clean | /Users/example | -         | scan dead symlinks | risky clean, confirmat
 - `--verbose`: 输出更详细的信息
 - `--quiet`: 仅输出失败信息
 - `--no-color`: 关闭彩色输出
+- `--allow-protected-target`: 放行受保护目标覆盖, 高风险
+- `--allow-risky-clean`: 放行高风险 clean 根路径, 高风险
 - `-h, --help`: 显示帮助信息
 
 约束:
@@ -1129,9 +1136,11 @@ dotbot-go [flags]
 
 - 工具一句话简介
 - 默认配置文件名
+- 高风险 override 参数及其含义
 - `--dry-run` 的含义
 - `--verbose` / `--quiet` 的区别
 - 配置文件路径解析的基本规则
+- 审阅界面与非交互文本回退的基本规则
 
 建议帮助概要:
 

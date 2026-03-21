@@ -148,34 +148,16 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m reviewModel) View() string {
-	titleLine := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		m.styles.modeBadge.Render(reviewTitle(m.data.Mode)),
-		" ",
-		m.styles.title.Render(filepath.Base(m.data.ConfigPath)),
-	)
-
-	footer := m.styles.muted.Render(fmt.Sprintf("%s 退出", m.styles.key.Render("q")))
-	if m.data.Mode == output.ReviewModeDryRun {
-		footer = m.styles.muted.Render(
-			fmt.Sprintf(
-				"%s/%s 滚动  •  %s/%s 顶部底部  •  %s 退出",
-				m.styles.key.Render("j"),
-				m.styles.key.Render("k"),
-				m.styles.key.Render("g"),
-				m.styles.key.Render("G"),
-				m.styles.key.Render("q"),
-			),
-		)
-	}
+	outerWidth := m.bodyWidth() + m.styles.doc.GetHorizontalFrameSize()
+	docWidth := contentWidth(m.styles.doc, outerWidth)
 
 	parts := []string{
-		titleLine,
-		m.styles.subtitle.Render(m.headerSummary()),
+		m.renderTitle(docWidth),
+		m.styles.subtitle.Render(strings.Join(wrapByDelimiter(m.headerSummary(), docWidth, "  •  "), "\n")),
 		m.viewport.View(),
-		footer,
+		m.renderFooter(docWidth),
 	}
-	return renderSized(m.styles.doc, m.bodyWidth()+m.styles.doc.GetHorizontalFrameSize(), strings.Join(parts, "\n\n"))
+	return renderSized(m.styles.doc, outerWidth, strings.Join(parts, "\n\n"))
 }
 
 func (m reviewModel) bodyWidth() int {
@@ -193,4 +175,63 @@ func (m reviewModel) headerSummary() string {
 	default:
 		return fmt.Sprintf("计划动作 %d 项  •  风险 %d 项", len(m.data.Entries), len(m.data.Risks))
 	}
+}
+
+func (m reviewModel) renderTitle(width int) string {
+	badgeText := reviewTitle(m.data.Mode)
+	titleText := filepath.Base(m.data.ConfigPath)
+	badge := m.styles.modeBadge.Render(badgeText)
+	if displayWidth(badgeText)+1+displayWidth(titleText) <= width {
+		return lipgloss.JoinHorizontal(lipgloss.Top, badge, " ", m.styles.title.Render(titleText))
+	}
+
+	remaining := width - displayWidth(badgeText) - 1
+	if remaining >= 1 {
+		lines := wrapText(titleText, remaining)
+		if len(lines) > 0 {
+			rendered := []string{lipgloss.JoinHorizontal(lipgloss.Top, badge, " ", m.styles.title.Render(lines[0]))}
+			for _, line := range lines[1:] {
+				rendered = append(rendered, m.styles.title.Render(line))
+			}
+			return strings.Join(rendered, "\n")
+		}
+	}
+
+	titleLines := wrapText(titleText, width)
+	rendered := []string{badge}
+	for _, line := range titleLines {
+		rendered = append(rendered, m.styles.title.Render(line))
+	}
+	return strings.Join(rendered, "\n")
+}
+
+func (m reviewModel) renderFooter(width int) string {
+	segments := []string{m.styles.key.Render("q") + " 退出"}
+	if m.data.Mode == output.ReviewModeDryRun {
+		segments = []string{
+			m.styles.key.Render("j/k") + " 滚动",
+			m.styles.key.Render("g/G") + " 顶部底部",
+			m.styles.key.Render("q") + " 退出",
+		}
+	}
+	return m.styles.muted.Render(joinWrappedSegments(segments, "  •  ", width))
+}
+
+func joinWrappedSegments(segments []string, delimiter string, width int) string {
+	if len(segments) == 0 {
+		return ""
+	}
+	lines := []string{segments[0]}
+	current := segments[0]
+	for _, segment := range segments[1:] {
+		candidate := current + delimiter + segment
+		if lipgloss.Width(candidate) <= width {
+			current = candidate
+			lines[len(lines)-1] = current
+			continue
+		}
+		lines = append(lines, segment)
+		current = segment
+	}
+	return strings.Join(lines, "\n")
 }

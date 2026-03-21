@@ -105,7 +105,8 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	}
 
 	info, err := os.Lstat(link.Target)
-	if err != nil && !os.IsNotExist(err) {
+	targetMissing := os.IsNotExist(err)
+	if err != nil && !targetMissing {
 		entry.Decision = string(output.StatusFailed)
 		entry.Status = output.StatusFailed
 		entry.Message = err.Error()
@@ -123,7 +124,7 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		}
 	}
 
-	if os.IsNotExist(err) {
+	if targetMissing {
 		entry.Decision = "linked"
 		entry.Status = output.StatusLinked
 		if opts.DryRun {
@@ -157,10 +158,18 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		entry.Status = output.StatusReplaced
 		if opts.DryRun {
 			entry.Decision = "replace"
-			if link.Force {
+			if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+				entry.Message = "protected target, confirmation required"
+			} else if link.Force {
 				entry.Message = "force=true"
 			}
 			return entry, change{replaced: true}, false, nil
+		}
+		if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+			entry.Decision = string(output.StatusFailed)
+			entry.Status = output.StatusFailed
+			entry.Message = "protected target requires confirmation"
+			return entry, change{}, false, fmt.Errorf("protected target requires confirmation or --allow-protected-target: %s", link.Target)
 		}
 		if err := os.Remove(link.Target); err != nil {
 			entry.Decision = string(output.StatusFailed)
