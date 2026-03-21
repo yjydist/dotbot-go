@@ -380,6 +380,16 @@ func TestRunAllowsProtectedTargetWithOverride(t *testing.T) {
 	}
 }
 
+func TestConfirmTargetsAcceptsYes(t *testing.T) {
+	var stdout bytes.Buffer
+	if err := confirmTargets(strings.NewReader("y\n"), &stdout, []string{"/tmp/a"}, nil); err != nil {
+		t.Fatalf("confirmTargets() error = %v", err)
+	}
+	if !strings.Contains(stdout.String(), "continue anyway? [y/N]: ") {
+		t.Fatalf("stdout = %q, want yes/no prompt", stdout.String())
+	}
+}
+
 func TestRunDryRunMarksProtectedTargetConfirmation(t *testing.T) {
 	baseDir := t.TempDir()
 	configPath := filepath.Join(baseDir, "dotbot-go.toml")
@@ -439,5 +449,25 @@ func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
 	}
 	if _, err := os.Lstat(linkPath); !os.IsNotExist(err) {
 		t.Fatalf("dead link still exists, err=%v", err)
+	}
+}
+
+func TestConfirmTargetsRejectsNonYes(t *testing.T) {
+	var stdout bytes.Buffer
+	err := confirmTargets(strings.NewReader("n\n"), &stdout, []string{"/tmp/a"}, []string{"/tmp/b"})
+	if err == nil {
+		t.Fatal("confirmTargets() error = nil, want error")
+	}
+	if !strings.Contains(stdout.String(), "detected risky operations:") {
+		t.Fatalf("stdout = %q, want summary header", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "- replace protected target: /tmp/a") {
+		t.Fatalf("stdout = %q, want protected target item", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "- risky clean root: /tmp/b") {
+		t.Fatalf("stdout = %q, want risky clean item", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "continue anyway? [y/N]: ") {
+		t.Fatalf("stdout = %q, want yes/no prompt", stdout.String())
 	}
 }

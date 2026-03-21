@@ -100,10 +100,22 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return exitRuntime
 	}
 	protectedTargets := []string{cfg.BaseDir, workingDir, homeDir}
-	allowProtectedTarget, err := resolveProtectedTargetAllowance(stdin, stdout, opts, cfg.Links, protectedTargets)
+	allowProtectedTarget, riskyProtectedTargets, err := resolveProtectedTargetAllowance(stdin, stdout, opts, cfg.Links, protectedTargets)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
+	}
+	protectedRoots := []string{cfg.BaseDir, workingDir, homeDir}
+	allowRiskyClean, riskyCleanRoots, err := resolveRiskyCleanAllowance(stdin, stdout, opts, cfg.Clean.Paths, protectedRoots)
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return exitRuntime
+	}
+	if !opts.DryRun && !opts.Check && isInteractive(stdin, stdout) && (len(riskyProtectedTargets) > 0 || len(riskyCleanRoots) > 0) {
+		if err := confirmTargets(stdin, stdout, riskyProtectedTargets, riskyCleanRoots); err != nil {
+			fmt.Fprintln(stderr, err)
+			return exitRuntime
+		}
 	}
 	linkResult, err := linker.Apply(cfg.Links, linker.ApplyOptions{
 		DryRun:               dryRun,
@@ -113,12 +125,6 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if !opts.Check {
 		output.WriteEntries(stdout, outOpts, linkResult.Entries)
 	}
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return exitRuntime
-	}
-	protectedRoots := []string{cfg.BaseDir, workingDir, homeDir}
-	allowRiskyClean, err := resolveRiskyCleanAllowance(stdin, stdout, opts, cfg.Clean.Paths, protectedRoots)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
@@ -241,32 +247,26 @@ func writeHelp(w io.Writer) {
 	fmt.Fprintln(w, "  source 和 target 都支持 ~ 展开")
 }
 
-func resolveProtectedTargetAllowance(stdin io.Reader, stdout io.Writer, opts Options, links []config.LinkConfig, protectedTargets []string) (bool, error) {
+func resolveProtectedTargetAllowance(stdin io.Reader, stdout io.Writer, opts Options, links []config.LinkConfig, protectedTargets []string) (bool, []string, error) {
 	riskyTargets := collectProtectedTargets(links, protectedTargets)
 	if len(riskyTargets) == 0 || opts.DryRun || opts.Check || opts.AllowProtectedTarget {
-		return opts.AllowProtectedTarget, nil
+		return opts.AllowProtectedTarget, riskyTargets, nil
 	}
 	if !isInteractive(stdin, stdout) {
-		return false, fmt.Errorf("runtime error: protected target requires confirmation or --allow-protected-target: %s", riskyTargets[0])
+		return false, nil, fmt.Errorf("runtime error: protected target requires confirmation or --allow-protected-target: %s", riskyTargets[0])
 	}
-	if err := confirmTargets(stdin, stdout, "REPLACE", riskyTargets, "protected target"); err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, riskyTargets, nil
 }
 
-func resolveRiskyCleanAllowance(stdin io.Reader, stdout io.Writer, opts Options, roots, protectedRoots []string) (bool, error) {
+func resolveRiskyCleanAllowance(stdin io.Reader, stdout io.Writer, opts Options, roots, protectedRoots []string) (bool, []string, error) {
 	riskyRoots := collectRiskyCleanRoots(roots, protectedRoots)
 	if len(riskyRoots) == 0 || opts.DryRun || opts.Check || opts.AllowRiskyClean {
-		return opts.AllowRiskyClean, nil
+		return opts.AllowRiskyClean, riskyRoots, nil
 	}
 	if !isInteractive(stdin, stdout) {
-		return false, fmt.Errorf("runtime error: risky clean requires confirmation or --allow-risky-clean: %s", riskyRoots[0])
+		return false, nil, fmt.Errorf("runtime error: risky clean requires confirmation or --allow-risky-clean: %s", riskyRoots[0])
 	}
-	if err := confirmTargets(stdin, stdout, "CLEAN", riskyRoots, "risky clean"); err != nil {
-		return false, err
-	}
-	return true, nil
+	return true, riskyRoots, nil
 }
 
 func collectProtectedTargets(links []config.LinkConfig, protectedTargets []string) []string {
@@ -310,19 +310,26 @@ func collectRiskyCleanRoots(roots, protectedRoots []string) []string {
 	return risky
 }
 
-func confirmTargets(stdin io.Reader, stdout io.Writer, action string, targets []string, reason string) error {
+func confirmTargets(stdin io.Reader, stdout io.Writer, protectedTargets, riskyCleanRoots []string) error {
+	if len(protectedTargets) == 0 && len(riskyCleanRoots) == 0 {
+		return nil
+	}
 	reader := bufio.NewReader(stdin)
-	for _, target := range targets {
-		expected := fmt.Sprintf("CONFIRM %s %s", action, target)
-		fmt.Fprintf(stdout, "risk: %s: %s\n", reason, target)
-		fmt.Fprintf(stdout, "type %q to continue: ", expected)
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("runtime error: confirmation input: %w", err)
-		}
-		if strings.TrimSpace(line) != expected {
-			return fmt.Errorf("runtime error: confirmation rejected: %s", target)
-		}
+	fmt.Fprintln(stdout, "detected risky operations:")
+	for _, target := range protectedTargets {
+		fmt.Fprintf(stdout, "- replace protected target: %s\n", target)
+	}
+	for _, root := range riskyCleanRoots {
+		fmt.Fprintf(stdout, "- risky clean root: %s\n", root)
+	}
+	fmt.Fprint(stdout, "continue anyway? [y/N]: ")
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("runtime error: confirmation input: %w", err)
+	}
+	answer := strings.ToLower(strings.TrimSpace(line))
+	if answer != "y" && answer != "yes" {
+		return fmt.Errorf("runtime error: confirmation rejected")
 	}
 	return nil
 }

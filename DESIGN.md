@@ -924,15 +924,18 @@ config error: [[link]][1].source: required field is missing
 
 确认规则:
 
-- 工具在执行前打印风险摘要
-- 输出必须包含动作类型, 目标路径, 风险原因
-- 用户必须输入固定确认词后才继续
+- 工具在执行前一次性打印全部风险项摘要
+- 输出必须包含动作类型和目标路径
+- 用户只需做一次 `y/N` 确认
 
-建议确认词格式:
+建议交互格式:
 
 ```text
-CONFIRM REPLACE /absolute/target
-CONFIRM CLEAN /absolute/path
+detected risky operations:
+- replace protected target: /absolute/target
+- risky clean root: /absolute/path
+
+continue anyway? [y/N]:
 ```
 
 如果用户未确认:

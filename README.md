@@ -133,8 +133,8 @@ dotbot-go --dry-run -c dotbot-go.toml
 - `--verbose` 和 `--quiet` 互斥
 - `--verbose` 会额外输出配置文件路径, 基准目录, 默认值摘要, 以及阶段统计
 - 终端环境下默认允许彩色输出, `--no-color` 可关闭
-- 命中受保护目标时, 交互环境会要求确认, 非交互环境需显式传入 `--allow-protected-target`
-- 命中高风险 clean 根路径时, 交互环境会要求确认, 非交互环境需显式传入 `--allow-risky-clean`
+- 命中受保护目标时, 交互环境会先汇总风险项再做一次 `y/N` 确认, 非交互环境需显式传入 `--allow-protected-target`
+- 命中高风险 clean 根路径时, 交互环境会先汇总风险项再做一次 `y/N` 确认, 非交互环境需显式传入 `--allow-risky-clean`
 
 ## 推荐目录结构
 
@@ -211,7 +211,7 @@ dotfiles/
 - `force` 优先级高于 `relink`
 - `force = true` 表示用户接受覆盖风险
 - `force = true` 可覆盖普通文件, 目录, 或符号链接
-- 命中受保护目标时, 交互环境要求确认, 非交互环境需显式传入 `--allow-protected-target`
+- 命中受保护目标时, 交互环境会把风险项汇总后一次确认, 非交互环境需显式传入 `--allow-protected-target`
 - `ignore_missing = true` 时, 缺失 `source` 会被跳过而不是报错
 
 ### `[create]`
@@ -237,7 +237,7 @@ dotfiles/
 
 - 默认只清理 dead target 解析后仍位于仓库基准目录内的失效链接
 - `force = true` 时, 允许清理 dead target 位于仓库基准目录外的失效链接
-- `clean.paths` 如果命中高风险根路径, 交互环境要求确认, 非交互环境需显式传入 `--allow-risky-clean`
+- `clean.paths` 如果命中高风险根路径, 交互环境会把风险项汇总后一次确认, 非交互环境需显式传入 `--allow-risky-clean`
 
 ### `[default.*]`
 
@@ -272,7 +272,7 @@ dotfiles/
 - 失败即停
 - 不承诺回滚
 - `force = true` 的覆盖风险由用户承担
-- 真正高风险的覆盖和清理行为会要求交互确认, 或在非交互环境要求显式 override 参数
+- 真正高风险的覆盖和清理行为会先列出全部风险项, 再在交互环境做一次 `y/N` 确认, 或在非交互环境要求显式 override 参数
 
 如果你只想做纯校验, 可以使用:
 
