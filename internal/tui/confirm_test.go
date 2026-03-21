@@ -89,4 +89,5 @@ func TestConfirmModelShrinksToNarrowTerminal(t *testing.T) {
 	if got := result.viewportHeight(); got > 12 {
 		t.Fatalf("viewport height = %d, want <= 12", got)
 	}
+	assertRenderedWithinWidth(t, result.View(), 50)
 }

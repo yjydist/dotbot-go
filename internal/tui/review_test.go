@@ -54,6 +54,12 @@ func TestReviewModelViewDryRunIncludesRiskAndCards(t *testing.T) {
 	if !strings.Contains(view, "action: replace") {
 		t.Fatalf("View() = %q, want action field", view)
 	}
+	if !strings.Contains(view, "PLANNED") {
+		t.Fatalf("View() = %q, want planned badge for dry-run", view)
+	}
+	if strings.Contains(view, "REPLACED") {
+		t.Fatalf("View() = %q, should not show executed status badge in dry-run", view)
+	}
 }
 
 func TestReviewModelViewCheckOmitsPlanTable(t *testing.T) {

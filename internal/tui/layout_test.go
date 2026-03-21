@@ -116,3 +116,29 @@ func TestReviewPanelsStayWithinVeryNarrowWidth(t *testing.T) {
 	assertRenderedWithinWidth(t, model.renderOverviewPanel(), model.bodyWidth())
 	assertRenderedWithinWidth(t, model.renderEntrySection(), model.bodyWidth())
 }
+
+func TestReviewPanelsStayWithinUltraNarrowWidth(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(sampleDryRunReviewData(), true)
+	model.data.ConfigPath = "/x"
+	model.data.BaseDir = "/y"
+	model.data.Risks = []output.RiskItem{
+		{Kind: "replace protected target", Path: "/z"},
+	}
+	model.data.Entries = []output.Entry{
+		{
+			Stage:    "link",
+			Target:   "/very/long/target/path",
+			Source:   "/very/long/source/path",
+			Decision: "create symlink",
+			Status:   output.StatusLinked,
+		},
+	}
+	model.width = 20
+	model.height = 10
+
+	assertRenderedWithinWidth(t, model.renderOverviewPanel(), model.bodyWidth())
+	assertRenderedWithinWidth(t, model.renderRiskPanel(), model.bodyWidth())
+	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], reviewCardWidth(model.bodyWidth())), reviewCardWidth(model.bodyWidth()))
+}

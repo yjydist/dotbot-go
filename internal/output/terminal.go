@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // WriteEntries 输出 create/link/clean 每一条执行记录.
@@ -53,10 +55,11 @@ func FormatEntry(opts Options, entry Entry) string {
 }
 
 func pad(value string, width int) string {
-	if len(value) >= width {
+	current := runewidth.StringWidth(value)
+	if current >= width {
 		return value
 	}
-	return value + strings.Repeat(" ", width-len(value))
+	return value + strings.Repeat(" ", width-current)
 }
 
 // ColorEnabled 只在真实终端上启用颜色, 避免污染重定向输出.

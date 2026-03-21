@@ -44,6 +44,9 @@ func (m reviewModel) renderOverviewPanel() string {
 		m.styles.panelTitle.Render("概览"),
 		m.renderOverviewTable(rows, innerWidth),
 	}
+	if outerWidth < 14 {
+		return strings.Join(lines, "\n")
+	}
 	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))
 }
 
@@ -53,9 +56,17 @@ func (m reviewModel) renderRiskPanel() string {
 
 	lines := []string{m.styles.panelTitle.Render("风险")}
 	if len(m.data.Risks) == 0 {
-		lines = append(lines, m.styles.safeBadge.Render("SAFE")+" 无风险项")
+		if innerWidth < 12 {
+			lines = append(lines, "无风险项")
+		} else {
+			lines = append(lines, m.styles.safeBadge.Render("SAFE")+" 无风险项")
+		}
 	} else {
-		lines = append(lines, m.styles.riskBadge.Render(fmt.Sprintf("%d 项风险", len(m.data.Risks))))
+		if innerWidth < 12 {
+			lines = append(lines, fmt.Sprintf("风险项: %d", len(m.data.Risks)))
+		} else {
+			lines = append(lines, m.styles.riskBadge.Render(fmt.Sprintf("%d 项风险", len(m.data.Risks))))
+		}
 		for _, risk := range m.data.Risks {
 			label := fmt.Sprintf("%s: %s", risk.Kind, risk.Path)
 			if risk.Allowed {
@@ -63,6 +74,9 @@ func (m reviewModel) renderRiskPanel() string {
 			}
 			lines = append(lines, wrapBullet(label, innerWidth))
 		}
+	}
+	if outerWidth < 14 {
+		return strings.Join(lines, "\n")
 	}
 	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))
 }
@@ -86,12 +100,15 @@ func (m reviewModel) renderEntrySection() string {
 
 // renderEntryCard 是长路径场景下比纯表格更易读的计划动作展示形式.
 func (m reviewModel) renderEntryCard(index int, entry output.Entry, outerWidth int) string {
+	if outerWidth < 16 {
+		return m.renderCompactEntryCard(index, entry, outerWidth)
+	}
 	innerWidth := contentWidth(m.styles.card, outerWidth)
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		m.styles.stageBadge.Render(strings.ToUpper(entry.Stage)),
 		" ",
-		statusStyle(m.styles, entry.Status).Render(strings.ToUpper(string(entry.Status))),
+		reviewEntryBadgeStyle(m.styles, m.data.Mode, entry).Render(reviewEntryBadgeLabel(m.data.Mode, entry)),
 		" ",
 		m.styles.muted.Render(fmt.Sprintf("#%02d", index)),
 	)
@@ -113,6 +130,22 @@ func (m reviewModel) renderEntryCard(index int, entry output.Entry, outerWidth i
 	return renderSized(m.styles.card, outerWidth, strings.Join(lines, "\n"))
 }
 
+func (m reviewModel) renderCompactEntryCard(index int, entry output.Entry, width int) string {
+	header := fmt.Sprintf("#%02d %s %s", index, strings.ToUpper(entry.Stage), reviewEntryBadgeLabel(m.data.Mode, entry))
+	lines := wrapText(header, max(width, 1))
+	lines = append(lines, wrapLabelValue("target", entry.Target, width, m.styles.fieldLabel))
+	if entry.Source != "" {
+		lines = append(lines, wrapLabelValue("source", entry.Source, width, m.styles.fieldLabel))
+	}
+	if entry.Decision != "" {
+		lines = append(lines, wrapLabelValue("action", entry.Decision, width, m.styles.fieldLabel))
+	}
+	if entry.Message != "" {
+		lines = append(lines, wrapLabelValue("note", entry.Message, width, m.styles.fieldLabel))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func (m reviewModel) renderSummaryPanel() string {
 	outerWidth := m.bodyWidth()
 	innerWidth := contentWidth(m.styles.panel, outerWidth)
@@ -126,10 +159,14 @@ func (m reviewModel) renderSummaryPanel() string {
 		m.data.Summary.Failed,
 	)
 
-	return renderSized(m.styles.panel, outerWidth, strings.Join([]string{
+	lines := []string{
 		m.styles.panelTitle.Render("摘要"),
 		strings.Join(wrapByDelimiter(summaryLine, innerWidth, "  "), "\n"),
-	}, "\n"))
+	}
+	if outerWidth < 14 {
+		return strings.Join(lines, "\n")
+	}
+	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))
 }
 
 func (m reviewModel) renderCheckPanel() string {
@@ -154,6 +191,9 @@ func (m reviewModel) renderCheckPanel() string {
 		lines = append(lines, m.styles.muted.Render("存在高风险项, 但已由当前命令的 override 显式放行"))
 	default:
 		lines = append(lines, m.styles.muted.Render("配置和关键前置检查通过"))
+	}
+	if outerWidth < 14 {
+		return strings.Join(lines, "\n")
 	}
 	return renderSized(m.styles.panel, outerWidth, strings.Join(lines, "\n"))
 }
@@ -206,6 +246,9 @@ func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 	if len(rows) == 0 {
 		return ""
 	}
+	if width < 16 {
+		return m.renderOverviewList(rows, width)
+	}
 
 	labelWidth := lipgloss.Width("字段")
 	for _, row := range rows {
@@ -253,6 +296,14 @@ func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 	return tbl.View()
 }
 
+func (m reviewModel) renderOverviewList(rows []tableRow, width int) string {
+	lines := make([]string, 0, len(rows))
+	for _, row := range rows {
+		lines = append(lines, wrapLabelValue(row.Label, row.Value, width, m.styles.fieldLabel))
+	}
+	return strings.Join(lines, "\n")
+}
+
 func reviewCardWidth(bodyWidth int) int {
 	width := bodyWidth - 4
 	if width < 12 {
@@ -262,4 +313,34 @@ func reviewCardWidth(bodyWidth int) int {
 		return bodyWidth
 	}
 	return width
+}
+
+func reviewEntryBadgeLabel(mode output.ReviewMode, entry output.Entry) string {
+	if mode == output.ReviewModeDryRun {
+		switch entry.Status {
+		case output.StatusFailed:
+			return "FAILED"
+		case output.StatusSkipped:
+			return "SKIPPED"
+		case output.StatusInfo:
+			return "INFO"
+		default:
+			return "PLANNED"
+		}
+	}
+	return strings.ToUpper(string(entry.Status))
+}
+
+func reviewEntryBadgeStyle(s styles, mode output.ReviewMode, entry output.Entry) lipgloss.Style {
+	if mode == output.ReviewModeDryRun {
+		switch entry.Status {
+		case output.StatusFailed:
+			return s.statusError
+		case output.StatusSkipped:
+			return s.statusWarn
+		default:
+			return s.statusInfo
+		}
+	}
+	return statusStyle(s, entry.Status)
 }

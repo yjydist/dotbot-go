@@ -73,6 +73,16 @@ func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m confirmModel) View() string {
+	outerWidth := m.width + m.styles.doc.GetHorizontalFrameSize()
+	docWidth := contentWidth(m.styles.doc, outerWidth)
+	footerText := fmt.Sprintf("%s/%s 滚动  •  %s/%s 顶部底部  •  %s 确认  •  %s 取消",
+		m.styles.key.Render("j"),
+		m.styles.key.Render("k"),
+		m.styles.key.Render("g"),
+		m.styles.key.Render("G"),
+		m.styles.key.Render("y"),
+		m.styles.key.Render("Esc"),
+	)
 	lines := []string{
 		lipgloss.JoinHorizontal(
 			lipgloss.Top,
@@ -81,18 +91,9 @@ func (m confirmModel) View() string {
 			m.styles.title.Render("高风险操作确认"),
 		),
 		m.viewport.View(),
-		m.styles.muted.Render(
-			fmt.Sprintf("%s/%s 滚动  •  %s/%s 顶部底部  •  %s 确认  •  %s 取消",
-				m.styles.key.Render("j"),
-				m.styles.key.Render("k"),
-				m.styles.key.Render("g"),
-				m.styles.key.Render("G"),
-				m.styles.key.Render("y"),
-				m.styles.key.Render("Esc"),
-			),
-		),
+		m.styles.muted.Render(strings.Join(wrapByDelimiter(footerText, docWidth, "  •  "), "\n")),
 	}
-	return renderSized(m.styles.doc, m.width+m.styles.doc.GetHorizontalFrameSize(), strings.Join(lines, "\n\n"))
+	return renderSized(m.styles.doc, outerWidth, strings.Join(lines, "\n\n"))
 }
 
 func (m confirmModel) renderContent() string {

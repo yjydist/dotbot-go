@@ -38,11 +38,11 @@ func renderSized(style lipgloss.Style, outerWidth int, content string) string {
 }
 
 func contentWidth(style lipgloss.Style, outerWidth int) int {
-	return max(outerWidth-style.GetHorizontalFrameSize(), 12)
+	return max(outerWidth-style.GetHorizontalFrameSize(), 1)
 }
 
 func wrapBullet(value string, width int) string {
-	lines := wrapText(value, max(width-2, 12))
+	lines := wrapText(value, max(width-2, 1))
 	if len(lines) == 0 {
 		return "- "
 	}
@@ -55,7 +55,16 @@ func wrapBullet(value string, width int) string {
 
 func wrapLabelValue(label, value string, width int, labelStyle lipgloss.Style) string {
 	prefix := label + ": "
-	lines := wrapText(value, max(width-displayWidth(prefix), 12))
+	if displayWidth(prefix) >= width {
+		lines := wrapText(prefix+value, width)
+		if len(lines) == 0 {
+			return labelStyle.Render(prefix + "-")
+		}
+		rendered := []string{labelStyle.Render(lines[0])}
+		rendered = append(rendered, lines[1:]...)
+		return strings.Join(rendered, "\n")
+	}
+	lines := wrapText(value, max(width-displayWidth(prefix), 1))
 	if len(lines) == 0 {
 		lines = []string{"-"}
 	}

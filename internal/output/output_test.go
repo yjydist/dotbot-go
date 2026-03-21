@@ -45,6 +45,24 @@ func TestFormatEntryDryRunFailureUsesFailPrefix(t *testing.T) {
 	}
 }
 
+func TestFormatEntryKeepsCJKColumnsAligned(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{}, Entry{
+		Stage:    "link",
+		Target:   "/用户/配置",
+		Source:   "/仓库/源文件",
+		Decision: "create symlink",
+		Status:   StatusLinked,
+	})
+	if !strings.Contains(got, "/用户/配置 <- /仓库/源文件") {
+		t.Fatalf("FormatEntry() = %q, want CJK target/source text", got)
+	}
+	if !strings.Contains(got, "create symlink") {
+		t.Fatalf("FormatEntry() = %q, want decision after padded columns", got)
+	}
+}
+
 func TestFormatEntryWithColor(t *testing.T) {
 	t.Parallel()
 
