@@ -4,7 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // WriteReviewText 是非交互环境下的审阅输出回退实现.
@@ -113,5 +114,5 @@ func padDisplay(value string, width int) string {
 }
 
 func displayWidth(value string) int {
-	return utf8.RuneCountInString(value)
+	return runewidth.StringWidth(value)
 }

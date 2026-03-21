@@ -127,22 +127,58 @@ func shouldUseReviewUI(opts Options, stdin io.Reader, stdout io.Writer) bool {
 
 // buildVerboseLines 生成“实际生效配置”的简要摘要, 供 verbose 输出和审阅界面复用.
 func buildVerboseLines(cfg config.Config) []string {
+	linkSummary := buildLinkVerboseSummary(cfg.Links, cfg.Default.Link)
+
 	return []string{
-		fmt.Sprintf("link: create=%t relink=%t force=%t relative=%t ignore_missing=%t",
-			cfg.Default.Link.Create,
-			cfg.Default.Link.Relink,
-			cfg.Default.Link.Force,
-			cfg.Default.Link.Relative,
-			cfg.Default.Link.IgnoreMissing,
-		),
+		"link: " + linkSummary,
 		fmt.Sprintf("create: mode=%#o",
-			cfg.Default.Create.Mode,
+			cfg.Create.Mode,
 		),
 		fmt.Sprintf("clean: force=%t recursive=%t",
-			cfg.Default.Clean.Force,
-			cfg.Default.Clean.Recursive,
+			cfg.Clean.Force,
+			cfg.Clean.Recursive,
 		),
 	}
+}
+
+// buildLinkVerboseSummary 尝试给出“本次 link 阶段实际会怎么执行”的摘要.
+// 如果所有 link 的生效布尔值一致, 就直接展示具体值; 否则明确标注为 mixed.
+func buildLinkVerboseSummary(links []config.LinkConfig, defaults config.LinkDefaults) string {
+	if len(links) == 0 {
+		return fmt.Sprintf(
+			"create=%t relink=%t force=%t relative=%t ignore_missing=%t",
+			defaults.Create,
+			defaults.Relink,
+			defaults.Force,
+			defaults.Relative,
+			defaults.IgnoreMissing,
+		)
+	}
+
+	first := links[0]
+	same := true
+	for _, link := range links[1:] {
+		if link.Create != first.Create ||
+			link.Relink != first.Relink ||
+			link.Force != first.Force ||
+			link.Relative != first.Relative ||
+			link.IgnoreMissing != first.IgnoreMissing {
+			same = false
+			break
+		}
+	}
+	if !same {
+		return "mixed per-link values"
+	}
+
+	return fmt.Sprintf(
+		"create=%t relink=%t force=%t relative=%t ignore_missing=%t",
+		first.Create,
+		first.Relink,
+		first.Force,
+		first.Relative,
+		first.IgnoreMissing,
+	)
 }
 
 // buildVerboseReport 是普通执行模式下的前置 verbose 文本块.

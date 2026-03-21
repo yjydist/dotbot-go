@@ -134,3 +134,11 @@ func TestWriteReviewTextCheck(t *testing.T) {
 		t.Fatalf("WriteReviewText() = %q, check should not print action table", got)
 	}
 }
+
+func TestDisplayWidthTreatsCJKAsTerminalCells(t *testing.T) {
+	t.Parallel()
+
+	if got, want := displayWidth("阶段"), 4; got != want {
+		t.Fatalf("displayWidth() = %d, want %d", got, want)
+	}
+}
