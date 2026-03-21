@@ -3,6 +3,8 @@ package runner
 import (
 	"bytes"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,6 +76,42 @@ func TestRunUsesReviewUIForCheckWhenInteractive(t *testing.T) {
 	var stderr bytes.Buffer
 	if got, want := run([]string{"--check"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
 		t.Fatalf("Run(check) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !called {
+		t.Fatal("review UI not called")
+	}
+}
+
+func TestRunReviewUIOmitsAllowedRiskItems(t *testing.T) {
+	fixture := newRunnerFixture(t, false)
+	source := filepath.Join(fixture.baseDir, "source.txt")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fixture.writeConfig(t,
+		"[[link]]",
+		"target = "+quote(fixture.homeDir),
+		"source = "+quote(source),
+		"force = true",
+	)
+
+	called := false
+	withRunnerHooks(t,
+		func(io.Reader, io.Writer) bool { return true },
+		func(stdin io.Reader, stdout io.Writer, noColor bool, data output.ReviewData) error {
+			called = true
+			if len(data.Risks) != 0 {
+				t.Fatalf("review risks = %+v, want empty when override is provided", data.Risks)
+			}
+			return nil
+		},
+		nil,
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--dry-run", "--config", fixture.configPath, "--allow-protected-target"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run(dry-run) = %d, want %d, stderr=%q", got, want, stderr.String())
 	}
 	if !called {
 		t.Fatal("review UI not called")

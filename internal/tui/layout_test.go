@@ -61,3 +61,14 @@ func TestReviewModelPanelsStayWithinWidthWithCJK(t *testing.T) {
 	assertRenderedWithinWidth(t, model.renderRiskPanel(), model.bodyWidth())
 	assertRenderedWithinWidth(t, model.renderEntryCard(1, model.data.Entries[0], clamp(model.bodyWidth()-4, 52, model.bodyWidth())), clamp(model.bodyWidth()-4, 52, model.bodyWidth()))
 }
+
+func TestWrapTextRespectsDisplayWidthForCJK(t *testing.T) {
+	t.Parallel()
+
+	lines := wrapText("这是一个非常长的中文路径用于验证宽度换行是否正确", 10)
+	for _, line := range lines {
+		if got := displayWidth(line); got > 10 {
+			t.Fatalf("displayWidth(%q) = %d, want <= 10", line, got)
+		}
+	}
+}
