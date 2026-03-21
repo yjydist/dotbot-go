@@ -206,6 +206,7 @@ dotfiles/
 - `relink` 只处理已存在的符号链接
 - `force` 优先级高于 `relink`
 - `force = true` 表示用户接受覆盖风险
+- 即使 `force = true`, 也不会覆盖受保护目标, 包括 `/`, Home 根目录, 当前工作目录根, 配置文件基准目录
 - `ignore_missing = true` 时, 缺失 `source` 会被跳过而不是报错
 
 ### `[create]`
@@ -226,6 +227,12 @@ dotfiles/
 - `paths`: 必填, 但允许为空数组
 - `force`: 选填, 默认 `false`
 - `recursive`: 选填, 默认 `false`
+
+规则:
+
+- `clean.paths` 必须是实际目录, 不能是符号链接
+- 默认只清理 dead target 解析后仍位于仓库基准目录内的失效链接
+- `force` 不会放宽仓库边界
 
 ### `[default.*]`
 
@@ -259,7 +266,7 @@ dotfiles/
 
 - 失败即停
 - 不承诺回滚
-- `force = true` 的覆盖风险由用户承担
+- `force = true` 的覆盖风险由用户承担, 但受保护目标仍会被拒绝
 
 如果你只想做纯校验, 可以使用:
 

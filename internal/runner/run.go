@@ -91,7 +91,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	linkResult, err := linker.Apply(cfg.Links, dryRun)
+	linkResult, err := linker.Apply(cfg.Links, linker.ApplyOptions{
+		DryRun:           dryRun,
+		ProtectedTargets: []string{cfg.BaseDir, workingDir, homeDir},
+	})
 	if !opts.Check {
 		output.WriteEntries(stdout, outOpts, linkResult.Entries)
 	}

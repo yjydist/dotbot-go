@@ -350,6 +350,7 @@ source = "../shared/zshrc"
 - `force` 优先级高于 `relink`
 - `relink` 仅处理目标已存在且目标本身是符号链接的情况
 - `force` 可处理目标已存在且为普通文件, 目录, 或符号链接的情况
+- 即使 `force = true`, 也不能覆盖受保护目标, 包括 `/`, Home 根目录, 当前工作目录根, 配置文件基准目录
 
 #### 目标已存在但类型不匹配
 
@@ -575,6 +576,11 @@ relative = false
 - 不报错
 - 输出 `skip`, 并标记原因是目录不存在
 
+#### `clean.paths` 为符号链接
+
+- 直接报错
+- 不跟随目录符号链接作为清理根路径
+
 #### 权限不足
 
 - 直接报错
@@ -620,6 +626,8 @@ runtime error: [[link]][1].source: source does not exist: /repo/git/gitconfig
 - dotfiles 安装更适合保守策略
 - 失败即停比“尽量继续”更容易理解
 - `force = true` 表示用户明确接受覆盖风险, 工具不承诺恢复执行前状态
+- `clean` 默认只删除 dead target 仍位于仓库基准目录内的失效链接
+- `clean.force` 不会放宽仓库边界
 
 ## P0 Dry Run 与可观察性定稿
 
@@ -915,18 +923,24 @@ dotbot-go [flags]
 建议帮助概要:
 
 ```text
-dotbot-go - declarative dotfiles manager for Unix-like systems
+dotbot-go - 面向类 Unix 系统的声明式 dotfiles 管理工具
 
 Usage:
   dotbot-go [flags]
 
 Flags:
-  -c, --config <path>   Path to config file (default: ./dotbot-go.toml)
-      --dry-run         Show planned actions without changing files
-      --verbose         Show detailed output
-      --quiet           Show failures only
-      --no-color        Disable colored output
-  -h, --help            Show help
+  -c, --config <path>   配置文件路径, 默认: ./dotbot-go.toml
+      --check           仅校验配置和关键运行前条件
+      --dry-run         仅展示计划动作, 不修改文件系统
+      --verbose         输出配置路径, 默认值摘要, 阶段统计
+      --quiet           仅输出失败信息, 不输出成功和摘要
+      --no-color        关闭彩色输出
+  -h, --help            显示帮助
+
+Path rules:
+  source 相对路径基于配置文件目录解析
+  target 相对路径基于当前工作目录解析
+  source 和 target 都支持 ~ 展开
 ```
 
 ### 5. 第一版平台声明

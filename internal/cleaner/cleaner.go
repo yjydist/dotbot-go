@@ -19,7 +19,7 @@ type Result struct {
 func Apply(cfg config.Config, dryRun bool) (Result, error) {
 	result := Result{}
 	for _, root := range cfg.Clean.Paths {
-		info, err := os.Stat(root)
+		info, err := os.Lstat(root)
 		if err != nil {
 			if os.IsNotExist(err) {
 				result.Skipped++
@@ -28,6 +28,10 @@ func Apply(cfg config.Config, dryRun bool) (Result, error) {
 			}
 			result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: err.Error()})
 			return result, fmt.Errorf("runtime error: [clean].paths: stat %s: %w", root, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: "path must not be a symlink"})
+			return result, fmt.Errorf("runtime error: [clean].paths: path must not be a symlink: %s", root)
 		}
 		if !info.IsDir() {
 			result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: "path is not a directory"})
@@ -75,7 +79,7 @@ func Apply(cfg config.Config, dryRun bool) (Result, error) {
 	return result, nil
 }
 
-func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *output.Entry, deleted, skipped int, err error) {
+func maybeRemoveDeadLink(path, baseDir string, _ bool, dryRun bool) (entry *output.Entry, deleted, skipped int, err error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -100,8 +104,8 @@ func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *outpu
 	} else if !os.IsNotExist(err) {
 		return nil, 0, 0, err
 	}
-	if !force && !isWithinBase(resolved, baseDir) {
-		out := output.Entry{Stage: "clean", Target: path, Decision: string(output.StatusSkipped), Status: output.StatusSkipped, Message: "outside base and force=false"}
+	if !isWithinBase(resolved, baseDir) {
+		out := output.Entry{Stage: "clean", Target: path, Decision: string(output.StatusSkipped), Status: output.StatusSkipped, Message: "target outside base"}
 		return &out, 0, 1, nil
 	}
 	decision := output.Entry{Stage: "clean", Target: path, Decision: "deleted", Status: output.StatusDeleted}
