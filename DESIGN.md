@@ -350,6 +350,7 @@ source = "../shared/zshrc"
 - `force` 优先级高于 `relink`
 - `relink` 仅处理目标已存在且目标本身是符号链接的情况
 - `force` 可处理目标已存在且为普通文件, 目录, 或符号链接的情况
+- 即使 `force = true`, 也不能覆盖受保护目标, 包括 `/`, Home 根目录, 当前工作目录根, 配置文件基准目录
 
 #### 目标已存在但类型不匹配
 
@@ -575,6 +576,11 @@ relative = false
 - 不报错
 - 输出 `skip`, 并标记原因是目录不存在
 
+#### `clean.paths` 为符号链接
+
+- 直接报错
+- 不跟随目录符号链接作为清理根路径
+
 #### 权限不足
 
 - 直接报错
@@ -620,6 +626,8 @@ runtime error: [[link]][1].source: source does not exist: /repo/git/gitconfig
 - dotfiles 安装更适合保守策略
 - 失败即停比“尽量继续”更容易理解
 - `force = true` 表示用户明确接受覆盖风险, 工具不承诺恢复执行前状态
+- `clean` 默认只删除 dead target 仍位于仓库基准目录内的失效链接
+- `clean.force` 不会放宽仓库边界
 
 ## P0 Dry Run 与可观察性定稿
 
@@ -840,6 +848,152 @@ target = "~/.gitconfig"
 config error: [[link]][1].source: required field is missing
 ```
 
+## P1 风险确认机制定稿
+
+本节定义当前 `force` 与高风险清理行为的最终语义.
+
+目标不是取消风险, 而是把风险显式暴露给用户, 并在真正危险的场景下要求二次确认.
+
+### 1. 设计目标
+
+- 保留 `link.force` 和 `clean.force` 的实际能力
+- 默认执行仍保持保守
+- 真正高风险的文件系统操作必须显式确认
+- 交互环境和非交互环境采用不同确认方式
+- 不能只靠文档声明“风险自负”, 必须让工具在执行前明确暴露风险
+
+### 2. 风险分级
+
+#### 普通风险
+
+普通风险指用户在 dotfiles 场景中经常需要, 但仍具有覆盖或删除语义的操作:
+
+- 使用 `link.force = true` 覆盖普通文件
+- 使用 `link.force = true` 覆盖普通目录
+- 使用 `clean.force = true` 清理 dead target 位于仓库外的失效链接
+
+约束:
+
+- dry-run 必须明确显示覆盖或删除动作
+- 默认输出必须明确标记 `replace` 或 `delete`
+- 普通风险不要求二次确认
+
+#### 危险风险
+
+危险风险指一旦配置错误就可能造成大面积破坏的操作:
+
+- 覆盖 `/`
+- 覆盖用户 Home 根目录
+- 覆盖当前工作目录根
+- 覆盖配置文件基准目录
+- 把 `clean.paths` 设为目录符号链接并以其作为扫描根
+- 清理范围明显越过用户预期边界的大范围根路径
+
+约束:
+
+- 危险风险默认不得直接静默执行
+- 交互环境必须要求二次确认
+- 非交互环境必须要求显式 override 参数
+
+### 3. `link.force` 最终语义
+
+- `force = false` 时, 目标已存在且无法安全复用时直接报错
+- `force = true` 时, 允许覆盖普通文件, 目录, 或符号链接
+- 当目标命中危险风险集合时, 不再直接执行, 而是进入风险确认流程
+
+风险确认通过后:
+
+- 允许继续执行覆盖
+- 覆盖前仍需在输出中明确标记将要替换的目标
+
+### 4. `clean.force` 最终语义
+
+- 默认 `clean` 只清理 dead target 解析后仍位于仓库基准目录内的失效链接
+- `clean.force = true` 时, 允许清理 dead target 位于仓库基准目录外的失效链接
+- `clean.paths` 必须是实际目录, 不能是目录符号链接
+- 如果 `clean.paths` 命中危险风险集合, 进入风险确认流程
+
+补充约束:
+
+- `clean.force` 只放宽“dead target 是否位于仓库内”的限制
+- `clean.force` 不自动放宽危险扫描根路径限制
+
+### 5. 交互确认流程
+
+仅当 stdout/stderr/stdin 处于 TTY 交互环境时启用交互确认.
+
+确认规则:
+
+- 工具在执行前一次性打印全部风险项摘要
+- 输出必须包含动作类型和目标路径
+- 用户只需做一次 `y/N` 确认
+
+建议交互格式:
+
+```text
+detected risky operations:
+- replace protected target: /absolute/target
+- risky clean root: /absolute/path
+
+continue anyway? [y/N]:
+```
+
+如果用户未确认:
+
+- 本次执行直接终止
+- 返回运行时错误退出码
+
+### 6. 非交互 override 规则
+
+非交互环境不得进入等待用户输入的状态.
+
+因此:
+
+- 如果命中危险风险且当前不是 TTY, 直接报错
+- 用户必须显式传入更强的 override 参数才允许继续
+
+建议参数:
+
+- `--allow-protected-target`
+- `--allow-risky-clean`
+
+约束:
+
+- 这些参数只用于放行危险风险
+- 不改变普通风险的默认语义
+- 必须在 help 和文档中明确标注为高风险参数
+
+### 7. dry-run 与输出要求
+
+dry-run 必须在危险风险场景下输出足够明确的提示.
+
+推荐示例:
+
+```text
+[dry-run] link    /Users/example <- /repo/file      replace (protected target, confirmation required)
+[dry-run] clean   /Users/example                    scan dead symlinks (risky clean, confirmation required)
+```
+
+普通执行中, 如果进入确认流程, 应先打印风险提示, 再等待确认.
+
+### 8. 为什么采用该方案
+
+- 保留 `force` 的表达能力, 不把配置字段做成空壳
+- 把“风险由用户承担”从抽象声明变成真实确认动作
+- 兼顾交互使用和脚本使用
+- 避免把一次误配置静默升级成灾难性删除
+
+### 9. 实现顺序
+
+实现按以下顺序推进:
+
+1. 在运行时识别交互环境与非交互环境
+2. 抽象危险目标与危险清理根的判定函数
+3. 为 `link.force` 接入风险确认流程
+4. 为 `clean.force` 恢复仓库外 dead target 清理能力
+5. 增加交互确认与非交互 override 的测试
+6. 同步 README, help 文案, dry-run 示例
+
 约束:
 
 - 配置错误时不输出 dry-run 动作列表
@@ -915,18 +1069,24 @@ dotbot-go [flags]
 建议帮助概要:
 
 ```text
-dotbot-go - declarative dotfiles manager for Unix-like systems
+dotbot-go - 面向类 Unix 系统的声明式 dotfiles 管理工具
 
 Usage:
   dotbot-go [flags]
 
 Flags:
-  -c, --config <path>   Path to config file (default: ./dotbot-go.toml)
-      --dry-run         Show planned actions without changing files
-      --verbose         Show detailed output
-      --quiet           Show failures only
-      --no-color        Disable colored output
-  -h, --help            Show help
+  -c, --config <path>   配置文件路径, 默认: ./dotbot-go.toml
+      --check           仅校验配置和关键运行前条件
+      --dry-run         仅展示计划动作, 不修改文件系统
+      --verbose         输出配置路径, 默认值摘要, 阶段统计
+      --quiet           仅输出失败信息, 不输出成功和摘要
+      --no-color        关闭彩色输出
+  -h, --help            显示帮助
+
+Path rules:
+  source 相对路径基于配置文件目录解析
+  target 相对路径基于当前工作目录解析
+  source 和 target 都支持 ~ 展开
 ```
 
 ### 5. 第一版平台声明

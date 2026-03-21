@@ -19,7 +19,7 @@ func TestApplyCreatesSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Apply([]config.LinkConfig{{Target: target, Source: source}}, false)
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source}}, ApplyOptions{})
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -48,7 +48,7 @@ func TestApplyForceReplacesFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, false)
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, ApplyOptions{})
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -67,7 +67,7 @@ func TestApplyIgnoreMissingSkips(t *testing.T) {
 	missing := filepath.Join(baseDir, "missing.txt")
 	target := filepath.Join(baseDir, "target.txt")
 
-	result, err := Apply([]config.LinkConfig{{Target: target, Source: missing, IgnoreMissing: true}}, false)
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: missing, IgnoreMissing: true}}, ApplyOptions{})
 	if err != nil {
 		t.Fatalf("Apply() error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestApplyDryRunDetectsExistingTargetConflictWithCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Create: true}}, true)
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Create: true}}, ApplyOptions{DryRun: true})
 	if err == nil {
 		t.Fatal("Apply() error = nil, want error")
 	}
@@ -102,5 +102,60 @@ func TestApplyDryRunDetectsExistingTargetConflictWithCreate(t *testing.T) {
 	}
 	if got, want := result.Entries[0].Status, output.StatusFailed; got != want {
 		t.Fatalf("Result.Entries[0].Status = %q, want %q", got, want)
+	}
+}
+
+func TestApplyForceRejectsProtectedTarget(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(baseDir, "target-dir")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, ApplyOptions{
+		ProtectedTargets: []string{target},
+	})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want error")
+	}
+	if got, want := len(result.Entries), 1; got != want {
+		t.Fatalf("len(Result.Entries) = %d, want %d", got, want)
+	}
+	if got, want := result.Entries[0].Status, output.StatusFailed; got != want {
+		t.Fatalf("Result.Entries[0].Status = %q, want %q", got, want)
+	}
+	if _, statErr := os.Stat(target); statErr != nil {
+		t.Fatalf("Stat(%q) error = %v, want protected target kept", target, statErr)
+	}
+}
+
+func TestApplyDryRunMarksProtectedTargetConfirmation(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(baseDir, "target-dir")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, ApplyOptions{
+		DryRun:           true,
+		ProtectedTargets: []string{target},
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if got, want := result.Entries[0].Message, "protected target, confirmation required"; got != want {
+		t.Fatalf("Result.Entries[0].Message = %q, want %q", got, want)
 	}
 }

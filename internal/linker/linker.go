@@ -16,10 +16,16 @@ type Result struct {
 	Entries  []output.Entry
 }
 
-func Apply(links []config.LinkConfig, dryRun bool) (Result, error) {
+type ApplyOptions struct {
+	DryRun               bool
+	ProtectedTargets     []string
+	AllowProtectedTarget bool
+}
+
+func Apply(links []config.LinkConfig, opts ApplyOptions) (Result, error) {
 	result := Result{}
 	for i, link := range links {
-		entry, changed, skipped, err := applyOne(link, dryRun)
+		entry, changed, skipped, err := applyOne(link, opts)
 		result.Entries = append(result.Entries, entry)
 		if err != nil {
 			return result, fmt.Errorf("runtime error: [[link]][%d]: %w", i+1, err)
@@ -42,7 +48,7 @@ type change struct {
 	replaced bool
 }
 
-func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, error) {
+func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, bool, error) {
 	entry := output.Entry{Stage: "link", Target: link.Target, Source: link.Source}
 	if _, err := os.Stat(link.Source); err != nil {
 		if os.IsNotExist(err) && link.IgnoreMissing {
@@ -65,7 +71,7 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 
 	if link.Create {
 		parent := filepath.Dir(link.Target)
-		if !dryRun {
+		if !opts.DryRun {
 			if err := os.MkdirAll(parent, 0o777); err != nil {
 				entry.Decision = string(output.StatusFailed)
 				entry.Status = output.StatusFailed
@@ -115,7 +121,7 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 	if os.IsNotExist(err) {
 		entry.Decision = "linked"
 		entry.Status = output.StatusLinked
-		if dryRun {
+		if opts.DryRun {
 			entry.Decision = "create symlink"
 			return entry, change{linked: true}, false, nil
 		}
@@ -144,7 +150,7 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 		}
 		entry.Decision = "replaced"
 		entry.Status = output.StatusReplaced
-		if dryRun {
+		if opts.DryRun {
 			entry.Decision = "replace"
 			if link.Force {
 				entry.Message = "force=true"
@@ -175,9 +181,18 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 	entry.Decision = "replaced"
 	entry.Status = output.StatusReplaced
 	entry.Message = "force=true"
-	if dryRun {
+	if opts.DryRun {
 		entry.Decision = "replace"
+		if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+			entry.Message = "protected target, confirmation required"
+		}
 		return entry, change{replaced: true}, false, nil
+	}
+	if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+		entry.Decision = string(output.StatusFailed)
+		entry.Status = output.StatusFailed
+		entry.Message = "protected target requires confirmation"
+		return entry, change{}, false, fmt.Errorf("protected target requires confirmation or --allow-protected-target: %s", link.Target)
 	}
 	if err := os.RemoveAll(link.Target); err != nil {
 		entry.Decision = string(output.StatusFailed)
@@ -192,4 +207,20 @@ func applyOne(link config.LinkConfig, dryRun bool) (output.Entry, change, bool, 
 		return entry, change{}, false, fmt.Errorf("create symlink %s -> %s: %w", link.Target, linkPath, err)
 	}
 	return entry, change{replaced: true}, false, nil
+}
+
+func isProtectedTarget(target string, protected []string) bool {
+	cleanedTarget := filepath.Clean(target)
+	if cleanedTarget == string(filepath.Separator) {
+		return true
+	}
+	for _, path := range protected {
+		if path == "" {
+			continue
+		}
+		if cleanedTarget == filepath.Clean(path) {
+			return true
+		}
+	}
+	return false
 }
