@@ -5,70 +5,11 @@ import (
 	"io"
 	"os"
 	"strings"
+
+	"github.com/mattn/go-runewidth"
 )
 
-type Mode int
-
-const (
-	ModeDefault Mode = iota
-	ModeVerbose
-	ModeQuiet
-)
-
-type Status string
-
-const (
-	StatusInfo     Status = "info"
-	StatusCreated  Status = "created"
-	StatusLinked   Status = "linked"
-	StatusSkipped  Status = "skipped"
-	StatusReplaced Status = "replaced"
-	StatusDeleted  Status = "deleted"
-	StatusFailed   Status = "failed"
-)
-
-type Entry struct {
-	Stage    string
-	Target   string
-	Source   string
-	Decision string
-	Status   Status
-	Message  string
-}
-
-type Summary struct {
-	Created  int
-	Linked   int
-	Skipped  int
-	Replaced int
-	Deleted  int
-	Failed   int
-}
-
-type Options struct {
-	Mode        Mode
-	DryRun      bool
-	EnableColor bool
-}
-
-func (s *Summary) Add(status Status) {
-	switch status {
-	case StatusCreated:
-		s.Created++
-	case StatusInfo:
-	case StatusLinked:
-		s.Linked++
-	case StatusSkipped:
-		s.Skipped++
-	case StatusReplaced:
-		s.Replaced++
-	case StatusDeleted:
-		s.Deleted++
-	case StatusFailed:
-		s.Failed++
-	}
-}
-
+// WriteEntries 输出 create/link/clean 每一条执行记录.
 func WriteEntries(w io.Writer, opts Options, entries []Entry) {
 	for _, entry := range entries {
 		if opts.Mode == ModeQuiet && entry.Status != StatusFailed {
@@ -78,6 +19,7 @@ func WriteEntries(w io.Writer, opts Options, entries []Entry) {
 	}
 }
 
+// WriteSummary 输出最终汇总统计.
 func WriteSummary(w io.Writer, opts Options, summary Summary) {
 	if opts.Mode == ModeQuiet {
 		return
@@ -85,16 +27,17 @@ func WriteSummary(w io.Writer, opts Options, summary Summary) {
 	fmt.Fprintf(w, "summary: created=%d linked=%d skipped=%d replaced=%d deleted=%d failed=%d\n", summary.Created, summary.Linked, summary.Skipped, summary.Replaced, summary.Deleted, summary.Failed)
 }
 
+// FormatEntry 负责把单条执行记录格式化成统一的终端输出.
 func FormatEntry(opts Options, entry Entry) string {
 	prefix := "[ok]"
-	if opts.DryRun {
+	if entry.Status == StatusFailed {
+		prefix = "[fail]"
+	} else if opts.DryRun {
 		prefix = "[dry-run]"
 	} else if entry.Status == StatusInfo {
 		prefix = "[info]"
 	} else if entry.Status == StatusSkipped {
 		prefix = "[skip]"
-	} else if entry.Status == StatusFailed {
-		prefix = "[fail]"
 	}
 	prefix = colorize(prefix, entry.Status, opts)
 	object := entry.Target
@@ -112,12 +55,14 @@ func FormatEntry(opts Options, entry Entry) string {
 }
 
 func pad(value string, width int) string {
-	if len(value) >= width {
+	current := runewidth.StringWidth(value)
+	if current >= width {
 		return value
 	}
-	return value + strings.Repeat(" ", width-len(value))
+	return value + strings.Repeat(" ", width-current)
 }
 
+// ColorEnabled 只在真实终端上启用颜色, 避免污染重定向输出.
 func ColorEnabled(w io.Writer, noColor bool) bool {
 	if noColor {
 		return false
@@ -133,20 +78,21 @@ func ColorEnabled(w io.Writer, noColor bool) bool {
 	return info.Mode()&os.ModeCharDevice != 0
 }
 
+// colorize 把状态映射成最小的一组 ANSI 前缀颜色.
 func colorize(prefix string, status Status, opts Options) string {
 	if !opts.EnableColor {
 		return prefix
 	}
 	color := ""
 	switch {
+	case status == StatusFailed:
+		color = "31"
 	case opts.DryRun:
 		color = "36"
 	case status == StatusInfo:
 		color = "34"
 	case status == StatusSkipped:
 		color = "33"
-	case status == StatusFailed:
-		color = "31"
 	default:
 		color = "32"
 	}

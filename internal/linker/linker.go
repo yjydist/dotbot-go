@@ -9,6 +9,7 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// Result 汇总 link 阶段的动作统计和输出条目.
 type Result struct {
 	Linked   int
 	Replaced int
@@ -16,12 +17,14 @@ type Result struct {
 	Entries  []output.Entry
 }
 
+// ApplyOptions 控制 link 阶段的 dry-run 和高风险覆盖边界.
 type ApplyOptions struct {
 	DryRun               bool
 	ProtectedTargets     []string
 	AllowProtectedTarget bool
 }
 
+// Apply 逐个执行 [[link]] 配置, 并保留与输入顺序一致的日志条目.
 func Apply(links []config.LinkConfig, opts ApplyOptions) (Result, error) {
 	result := Result{}
 	for i, link := range links {
@@ -48,6 +51,8 @@ type change struct {
 	replaced bool
 }
 
+// applyOne 实现单个 link 的完整决策流程:
+// 校验 source, 处理 create/relink/force, 最终落到创建或替换 symlink.
 func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, bool, error) {
 	entry := output.Entry{Stage: "link", Target: link.Target, Source: link.Source}
 	if _, err := os.Stat(link.Source); err != nil {
@@ -100,7 +105,8 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	}
 
 	info, err := os.Lstat(link.Target)
-	if err != nil && !os.IsNotExist(err) {
+	targetMissing := os.IsNotExist(err)
+	if err != nil && !targetMissing {
 		entry.Decision = string(output.StatusFailed)
 		entry.Status = output.StatusFailed
 		entry.Message = err.Error()
@@ -118,7 +124,7 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		}
 	}
 
-	if os.IsNotExist(err) {
+	if targetMissing {
 		entry.Decision = "linked"
 		entry.Status = output.StatusLinked
 		if opts.DryRun {
@@ -152,10 +158,18 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		entry.Status = output.StatusReplaced
 		if opts.DryRun {
 			entry.Decision = "replace"
-			if link.Force {
+			if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+				entry.Message = "protected target, confirmation required"
+			} else if link.Force {
 				entry.Message = "force=true"
 			}
 			return entry, change{replaced: true}, false, nil
+		}
+		if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+			entry.Decision = string(output.StatusFailed)
+			entry.Status = output.StatusFailed
+			entry.Message = "protected target requires confirmation"
+			return entry, change{}, false, fmt.Errorf("protected target requires confirmation or --allow-protected-target: %s", link.Target)
 		}
 		if err := os.Remove(link.Target); err != nil {
 			entry.Decision = string(output.StatusFailed)
@@ -209,6 +223,7 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	return entry, change{replaced: true}, false, nil
 }
 
+// isProtectedTarget 用来识别需要二次确认的危险覆盖目标.
 func isProtectedTarget(target string, protected []string) bool {
 	cleanedTarget := filepath.Clean(target)
 	if cleanedTarget == string(filepath.Separator) {

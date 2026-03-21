@@ -1,0 +1,148 @@
+package output
+
+import (
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/mattn/go-runewidth"
+)
+
+// WriteReviewText 是非交互环境下的审阅输出回退实现.
+func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
+	if opts.Mode == ModeQuiet {
+		return
+	}
+
+	fmt.Fprintf(w, "%s:\n", data.Mode)
+	fmt.Fprintf(w, "  config: %s\n", data.ConfigPath)
+	fmt.Fprintf(w, "  base dir: %s\n", data.BaseDir)
+	fmt.Fprintf(w, "  stages: create=%d link=%d clean=%d\n", data.StageCounts.Create, data.StageCounts.Link, data.StageCounts.Clean)
+	if len(data.Risks) == 0 {
+		fmt.Fprintln(w, "  risks: none")
+	} else {
+		fmt.Fprintf(w, "  risks: %d\n", len(data.Risks))
+		for _, risk := range data.Risks {
+			suffix := ""
+			if risk.Allowed {
+				suffix = " (已通过当前命令放行)"
+			}
+			fmt.Fprintf(w, "    - %s: %s%s\n", risk.Kind, risk.Path, suffix)
+		}
+	}
+	if opts.Mode == ModeVerbose {
+		for _, line := range ActiveVerboseLines(data.VerboseLines, data.StageCounts) {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
+	}
+
+	switch data.Mode {
+	case ReviewModeDryRun:
+		if len(data.Entries) > 0 {
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, RenderEntryTable(data.Entries))
+		}
+		WriteSummary(w, opts, data.Summary)
+	case ReviewModeCheck:
+		if data.Result != "" {
+			fmt.Fprintf(w, "  result: %s\n", data.Result)
+		}
+	}
+}
+
+// RenderEntryTable 用纯文本表格展示 dry-run 的计划动作.
+func RenderEntryTable(entries []Entry) string {
+	headers := []string{"阶段", "目标", "来源", "动作", "备注"}
+	rows := make([][]string, 0, len(entries))
+	widths := []int{
+		displayWidth(headers[0]),
+		displayWidth(headers[1]),
+		displayWidth(headers[2]),
+		displayWidth(headers[3]),
+		displayWidth(headers[4]),
+	}
+
+	for _, entry := range entries {
+		row := []string{
+			entry.Stage,
+			entry.Target,
+			entry.Source,
+			entry.Decision,
+			entry.Message,
+		}
+		if row[2] == "" {
+			row[2] = "-"
+		}
+		if row[4] == "" {
+			row[4] = "-"
+		}
+		rows = append(rows, row)
+		for i, cell := range row {
+			if w := displayWidth(cell); w > widths[i] {
+				widths[i] = w
+			}
+		}
+	}
+
+	lines := make([]string, 0, len(rows)+2)
+	lines = append(lines, renderTableRow(headers, widths))
+	lines = append(lines, renderDivider(widths))
+	for _, row := range rows {
+		lines = append(lines, renderTableRow(row, widths))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func renderTableRow(cells []string, widths []int) string {
+	parts := make([]string, 0, len(cells))
+	for i, cell := range cells {
+		parts = append(parts, padDisplay(cell, widths[i]))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func renderDivider(widths []int) string {
+	parts := make([]string, 0, len(widths))
+	for _, width := range widths {
+		parts = append(parts, strings.Repeat("-", width))
+	}
+	return strings.Join(parts, "-+-")
+}
+
+func padDisplay(value string, width int) string {
+	current := displayWidth(value)
+	if current >= width {
+		return value
+	}
+	return value + strings.Repeat(" ", width-current)
+}
+
+func displayWidth(value string) int {
+	return runewidth.StringWidth(value)
+}
+
+// ActiveVerboseLines 过滤掉本次运行不会参与执行的阶段配置摘要.
+func ActiveVerboseLines(lines []string, counts StageCounts) []string {
+	filtered := make([]string, 0, len(lines))
+	for _, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "link:"):
+			if counts.Link > 0 {
+				filtered = append(filtered, line)
+			}
+		case strings.HasPrefix(line, "create:"):
+			if counts.Create > 0 {
+				filtered = append(filtered, line)
+			}
+		case strings.HasPrefix(line, "clean:"):
+			if counts.Clean > 0 {
+				filtered = append(filtered, line)
+			}
+		default:
+			if line != "" {
+				filtered = append(filtered, line)
+			}
+		}
+	}
+	return filtered
+}

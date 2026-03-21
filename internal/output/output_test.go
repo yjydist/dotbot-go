@@ -27,6 +27,42 @@ func TestFormatEntry(t *testing.T) {
 	}
 }
 
+func TestFormatEntryDryRunFailureUsesFailPrefix(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{DryRun: true}, Entry{
+		Stage:    "link",
+		Target:   "~/.gitconfig",
+		Decision: "failed",
+		Status:   StatusFailed,
+		Message:  "target exists and force=false",
+	})
+	if !strings.Contains(got, "[fail]") {
+		t.Fatalf("FormatEntry() = %q, want fail prefix even in dry-run", got)
+	}
+	if strings.Contains(got, "[dry-run]") {
+		t.Fatalf("FormatEntry() = %q, should not use dry-run prefix for failure", got)
+	}
+}
+
+func TestFormatEntryKeepsCJKColumnsAligned(t *testing.T) {
+	t.Parallel()
+
+	got := FormatEntry(Options{}, Entry{
+		Stage:    "link",
+		Target:   "/用户/配置",
+		Source:   "/仓库/源文件",
+		Decision: "create symlink",
+		Status:   StatusLinked,
+	})
+	if !strings.Contains(got, "/用户/配置 <- /仓库/源文件") {
+		t.Fatalf("FormatEntry() = %q, want CJK target/source text", got)
+	}
+	if !strings.Contains(got, "create symlink") {
+		t.Fatalf("FormatEntry() = %q, want decision after padded columns", got)
+	}
+}
+
 func TestFormatEntryWithColor(t *testing.T) {
 	t.Parallel()
 
@@ -59,5 +95,125 @@ func TestFormatEntryNoColor(t *testing.T) {
 	got := FormatEntry(Options{EnableColor: false}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
 	if strings.Contains(got, "\x1b[") {
 		t.Fatalf("FormatEntry() = %q, should not include ANSI color code", got)
+	}
+}
+
+func TestRenderEntryTable(t *testing.T) {
+	t.Parallel()
+
+	got := RenderEntryTable([]Entry{
+		{Stage: "create", Target: "/tmp/a", Decision: "create", Status: StatusCreated},
+		{Stage: "link", Target: "/tmp/b", Source: "/repo/b", Decision: "create symlink", Status: StatusLinked, Message: "protected target, confirmation required"},
+	})
+	if !strings.Contains(got, "阶段") || !strings.Contains(got, "目标") {
+		t.Fatalf("RenderEntryTable() = %q, want table header", got)
+	}
+	if !strings.Contains(got, "/repo/b") {
+		t.Fatalf("RenderEntryTable() = %q, want source column", got)
+	}
+	if !strings.Contains(got, "protected target, confirmation required") {
+		t.Fatalf("RenderEntryTable() = %q, want message column", got)
+	}
+}
+
+func TestWriteReviewTextDryRun(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{DryRun: true}, ReviewData{
+		Mode:        ReviewModeDryRun,
+		ConfigPath:  "/repo/dotbot-go.toml",
+		BaseDir:     "/repo",
+		StageCounts: StageCounts{Create: 1, Link: 1, Clean: 0},
+		Risks:       []RiskItem{{Kind: "replace protected target", Path: "/tmp/a"}},
+		Entries: []Entry{
+			{Stage: "link", Target: "/tmp/a", Source: "/repo/a", Decision: "replace", Status: StatusReplaced, Message: "protected target, confirmation required"},
+		},
+		Summary: Summary{Replaced: 1},
+	})
+
+	got := buf.String()
+	if !strings.Contains(got, "dry-run:") {
+		t.Fatalf("WriteReviewText() = %q, want mode header", got)
+	}
+	if !strings.Contains(got, "risks: 1") {
+		t.Fatalf("WriteReviewText() = %q, want risks summary", got)
+	}
+	if !strings.Contains(got, "阶段") || !strings.Contains(got, "目标") {
+		t.Fatalf("WriteReviewText() = %q, want table output", got)
+	}
+	if !strings.Contains(got, "summary: created=0 linked=0 skipped=0 replaced=1 deleted=0 failed=0") {
+		t.Fatalf("WriteReviewText() = %q, want summary", got)
+	}
+}
+
+func TestWriteReviewTextCheck(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{}, ReviewData{
+		Mode:        ReviewModeCheck,
+		ConfigPath:  "/repo/dotbot-go.toml",
+		BaseDir:     "/repo",
+		StageCounts: StageCounts{Create: 0, Link: 1, Clean: 1},
+		Result:      "check ok",
+	})
+
+	got := buf.String()
+	if !strings.Contains(got, "check:") {
+		t.Fatalf("WriteReviewText() = %q, want check header", got)
+	}
+	if !strings.Contains(got, "result: check ok") {
+		t.Fatalf("WriteReviewText() = %q, want check result", got)
+	}
+	if strings.Contains(got, "阶段 | 目标") {
+		t.Fatalf("WriteReviewText() = %q, check should not print action table", got)
+	}
+}
+
+func TestWriteReviewTextShowsAllowedRiskState(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{}, ReviewData{
+		Mode:  ReviewModeCheck,
+		Risks: []RiskItem{{Kind: "replace protected target", Path: "/tmp/a", Allowed: true}},
+	})
+
+	if got := buf.String(); !strings.Contains(got, "已通过当前命令放行") {
+		t.Fatalf("WriteReviewText() = %q, want allowed risk hint", got)
+	}
+}
+
+func TestWriteReviewTextVerboseFiltersInactiveStages(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	WriteReviewText(&buf, Options{Mode: ModeVerbose}, ReviewData{
+		Mode:        ReviewModeDryRun,
+		ConfigPath:  "/repo/dotbot-go.toml",
+		BaseDir:     "/repo",
+		StageCounts: StageCounts{Link: 1},
+		VerboseLines: []string{
+			"link: create=false relink=false force=false relative=false ignore_missing=false",
+			"create: mode=0777",
+			"clean: force=true recursive=true",
+		},
+	})
+
+	got := buf.String()
+	if !strings.Contains(got, "link: create=false") {
+		t.Fatalf("WriteReviewText() = %q, want active link summary", got)
+	}
+	if strings.Contains(got, "create: mode=0777") || strings.Contains(got, "clean: force=true") {
+		t.Fatalf("WriteReviewText() = %q, should not include inactive stage summaries", got)
+	}
+}
+
+func TestDisplayWidthTreatsCJKAsTerminalCells(t *testing.T) {
+	t.Parallel()
+
+	if got, want := displayWidth("阶段"), 4; got != want {
+		t.Fatalf("displayWidth() = %d, want %d", got, want)
 	}
 }

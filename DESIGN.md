@@ -40,7 +40,7 @@
 | 失败策略 | 失败即停, 不承诺回滚 |
 | Dry Run | 必须展示阶段, 动作, 目标, 决策, 结果 |
 | 日志粒度 | 默认, `--verbose`, `--quiet` |
-| CLI 参数 | `-c/--config`, `--dry-run`, `--verbose`, `--quiet`, `--no-color`, `-h/--help` |
+| CLI 参数 | `-c/--config`, `--check`, `--dry-run`, `--verbose`, `--quiet`, `--no-color`, `--allow-protected-target`, `--allow-risky-clean`, `-h/--help` |
 | 纯校验能力 | `--check` |
 | 退出码 | `0` 成功, `1` 运行时错误, `2` 配置错误 |
 | 第一版平台 | macOS 和 Linux |
@@ -647,13 +647,30 @@ dry-run 必须按内部固定阶段输出, 即:
 - 关键决策
 - 最终状态
 
-推荐文本格式:
+交互终端中, `--dry-run` 默认进入审阅界面, 展示:
+
+- 配置路径与 base dir
+- 阶段统计
+- 风险列表
+- 更适合长路径阅读的卡片式计划列表
+- 摘要统计
+
+非交互环境回退为纯文本表格, 推荐格式:
 
 ```text
-[dry-run] create  ~/.cache/zsh                         create
-[dry-run] link    ~/.gitconfig <- git/gitconfig       create symlink
-[dry-run] link    ~/.zshrc <- shell/zshrc             skip (source missing, ignore_missing=true)
-[dry-run] clean   ~/.config/old-link                  delete dead symlink
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=1 link=2 clean=1
+  risks: none
+
+阶段   | 目标               | 来源              | 动作             | 备注
+-----+------------------+-----------------+----------------+---
+create | ~/.cache/zsh      | -               | create         | -
+link   | ~/.gitconfig      | git/gitconfig   | create symlink | -
+link   | ~/.zshrc          | shell/zshrc     | skipped        | source missing, ignore_missing=true
+clean  | ~/.config/old-link | -               | delete dead symlink | -
+summary: created=1 linked=1 skipped=1 replaced=0 deleted=1 failed=0
 ```
 
 具体要求:
@@ -705,11 +722,9 @@ dry-run 必须按内部固定阶段输出, 即:
 
 #### `--verbose`
 
-- 输出所有默认信息
-- 额外输出配置文件路径
-- 额外输出配置基准目录
-- 额外输出默认值摘要
-- 额外输出阶段数量摘要
+- 普通执行模式下保持原有额外文本信息
+- 审阅界面展示当前实际生效配置, 文本回退在 `--verbose` 下额外展示生效配置摘要
+- 不再要求在 `--dry-run` / `--check` 前单独打印一段前置文本块
 
 #### `--quiet`
 
@@ -741,7 +756,7 @@ summary: created=2 linked=4 skipped=1 replaced=1 deleted=0 failed=0
 
 ### 6. dry-run 输出示例
 
-#### 示例 1: 常规计划输出
+#### 示例 1: 非交互常规计划输出
 
 配置片段:
 
@@ -757,28 +772,39 @@ source = "./git/gitconfig"
 paths = ["~"]
 ```
 
-期望 dry-run 输出:
+期望 dry-run 文本回退:
 
 ```text
-[dry-run] create  /Users/example/.cache/zsh           create
-[dry-run] link    /Users/example/.gitconfig <- /repo/git/gitconfig create symlink
-[dry-run] clean   /Users/example                      scan dead symlinks
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=1 link=1 clean=1
+  risks: none
+
+阶段   | 目标                         | 来源                 | 动作             | 备注
+-----+----------------------------+--------------------+----------------+---
+create | /Users/example/.cache/zsh   | -                  | create         | -
+link   | /Users/example/.gitconfig   | /repo/git/gitconfig | create symlink | -
+clean  | /Users/example              | -                  | scan dead symlinks | -
 summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
 ```
 
-#### 示例 1b: verbose 输出
+#### 示例 1b: 交互终端审阅界面
 
-期望 verbose 额外输出:
+期望行为:
+
+- 自动进入审阅界面
+- 默认展示 `config file` 绝对路径, `base dir`, 阶段统计, 实际生效配置表格, 风险列表和卡片式计划列表
+- `q` / `esc` 退出界面
+
+#### 示例 1c: verbose 输出
+
+期望 verbose 额外内容:
 
 ```text
-config: /repo/dotbot-go.toml
-base dir: /repo
-defaults: link(create=true relink=true force=false relative=true ignore_missing=false) create(mode=0755) clean(force=false recursive=false)
-stages: create=1 link=1 clean=1
-[ok] create  /Users/example/.cache/zsh               created
-[ok] link    ~/.gitconfig <- /repo/git/gitconfig     linked
-[info] clean   /Users/example                        scan dead symlinks
-summary: created=1 linked=1 skipped=0 replaced=0 deleted=0 failed=0
+link: create=true relink=true force=false relative=true ignore_missing=false
+create: mode=0755
+clean: force=false recursive=false
 ```
 
 #### 示例 2: 跳过缺失 source
@@ -792,10 +818,18 @@ source = "./ghostty/config"
 ignore_missing = true
 ```
 
-期望 dry-run 输出:
+期望 dry-run 文本回退:
 
 ```text
-[dry-run] link    /Users/example/.config/ghostty/config <- /repo/ghostty/config skipped (source missing, ignore_missing=true)
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=0 link=1 clean=0
+  risks: none
+
+阶段 | 目标                                   | 来源                  | 动作    | 备注
+----+--------------------------------------+---------------------+-------+------------------------------------
+link | /Users/example/.config/ghostty/config | /repo/ghostty/config | skipped | source missing, ignore_missing=true
 summary: created=0 linked=0 skipped=1 replaced=0 deleted=0 failed=0
 ```
 
@@ -810,10 +844,18 @@ source = "./tmux/tmux.conf"
 force = true
 ```
 
-期望 dry-run 输出:
+期望 dry-run 文本回退:
 
 ```text
-[dry-run] link    /Users/example/.tmux.conf <- /repo/tmux/tmux.conf replace (force=true)
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=0 link=1 clean=0
+  risks: none
+
+阶段 | 目标                    | 来源                | 动作    | 备注
+----+-----------------------+-------------------+-------+----------
+link | /Users/example/.tmux.conf | /repo/tmux/tmux.conf | replace | force=true
 summary: created=0 linked=0 skipped=0 replaced=1 deleted=0 failed=0
 ```
 
@@ -826,10 +868,18 @@ summary: created=0 linked=0 skipped=0 replaced=1 deleted=0 failed=0
 paths = ["~/.cache/nonexistent"]
 ```
 
-期望 dry-run 输出:
+期望 dry-run 文本回退:
 
 ```text
-[dry-run] clean   /Users/example/.cache/nonexistent   skipped (path missing)
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=0 link=0 clean=1
+  risks: none
+
+阶段 | 目标                              | 来源 | 动作    | 备注
+----+---------------------------------+----+-------+-------------
+clean | /Users/example/.cache/nonexistent | -  | skipped | path missing
 summary: created=0 linked=0 skipped=1 replaced=0 deleted=0 failed=0
 ```
 
@@ -910,7 +960,7 @@ config error: [[link]][1].source: required field is missing
 
 - 默认 `clean` 只清理 dead target 解析后仍位于仓库基准目录内的失效链接
 - `clean.force = true` 时, 允许清理 dead target 位于仓库基准目录外的失效链接
-- `clean.paths` 必须是实际目录, 不能是目录符号链接
+- `clean.paths` 即使是目录符号链接, 也只在确认后才允许作为高风险 clean 根路径使用
 - 如果 `clean.paths` 命中危险风险集合, 进入风险确认流程
 
 补充约束:
@@ -920,22 +970,28 @@ config error: [[link]][1].source: required field is missing
 
 ### 5. 交互确认流程
 
-仅当 stdout/stderr/stdin 处于 TTY 交互环境时启用交互确认.
+仅当 stdin 和 stdout 同时处于 TTY 交互环境时启用交互确认.
 
 确认规则:
 
-- 工具在执行前一次性打印全部风险项摘要
+- 工具在执行前进入 Bubble Tea 确认界面
+- 界面一次性展示全部风险项摘要
 - 输出必须包含动作类型和目标路径
-- 用户只需做一次 `y/N` 确认
+- 用户只需做一次确认
 
-建议交互格式:
+建议交互内容:
 
 ```text
-detected risky operations:
+DANGER 高风险操作确认
+
+本次执行命中了高风险操作。
+风险项数量: 2
+输入 y 才会继续执行覆盖或清理动作, 取消则本次执行直接终止。
+
 - replace protected target: /absolute/target
 - risky clean root: /absolute/path
 
-continue anyway? [y/N]:
+y 确认, Esc 取消
 ```
 
 如果用户未确认:
@@ -967,14 +1023,30 @@ continue anyway? [y/N]:
 
 dry-run 必须在危险风险场景下输出足够明确的提示.
 
-推荐示例:
+交互终端中:
+
+- `--dry-run` 自动进入审阅界面
+- `--check` 自动进入摘要审阅界面
+- `--quiet` 不进入审阅界面
+
+非交互环境推荐示例:
 
 ```text
-[dry-run] link    /Users/example <- /repo/file      replace (protected target, confirmation required)
-[dry-run] clean   /Users/example                    scan dead symlinks (risky clean, confirmation required)
+dry-run:
+  config: /repo/dotbot-go.toml
+  base dir: /repo
+  stages: create=0 link=1 clean=1
+  risks: 2
+    - replace protected target: /Users/example
+    - risky clean root: /Users/example
+
+阶段 | 目标           | 来源      | 动作               | 备注
+----+--------------+---------+------------------+--------------------------------------
+link | /Users/example | /repo/file | replace          | protected target, confirmation required
+clean | /Users/example | -         | scan dead symlinks | risky clean, confirmation required
 ```
 
-普通执行中, 如果进入确认流程, 应先打印风险提示, 再等待确认.
+普通执行中, 如果进入确认流程, 应直接进入确认界面, 不再使用裸 `y/N` 提问.
 
 ### 8. 为什么采用该方案
 
@@ -1011,6 +1083,8 @@ dry-run 必须在危险风险场景下输出足够明确的提示.
 - `--verbose`: 输出更详细的信息
 - `--quiet`: 仅输出失败信息
 - `--no-color`: 关闭彩色输出
+- `--allow-protected-target`: 放行受保护目标覆盖, 高风险
+- `--allow-risky-clean`: 放行高风险 clean 根路径, 高风险
 - `-h, --help`: 显示帮助信息
 
 约束:
@@ -1062,9 +1136,11 @@ dotbot-go [flags]
 
 - 工具一句话简介
 - 默认配置文件名
+- 高风险 override 参数及其含义
 - `--dry-run` 的含义
 - `--verbose` / `--quiet` 的区别
 - 配置文件路径解析的基本规则
+- 审阅界面与非交互文本回退的基本规则
 
 建议帮助概要:
 
@@ -1078,7 +1154,7 @@ Flags:
   -c, --config <path>   配置文件路径, 默认: ./dotbot-go.toml
       --check           仅校验配置和关键运行前条件
       --dry-run         仅展示计划动作, 不修改文件系统
-      --verbose         输出配置路径, 默认值摘要, 阶段统计
+      --verbose         输出配置路径, 生效配置摘要, 阶段统计
       --quiet           仅输出失败信息, 不输出成功和摘要
       --no-color        关闭彩色输出
   -h, --help            显示帮助
