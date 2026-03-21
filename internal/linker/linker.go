@@ -9,6 +9,7 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// Result 汇总 link 阶段的动作统计和输出条目.
 type Result struct {
 	Linked   int
 	Replaced int
@@ -16,12 +17,14 @@ type Result struct {
 	Entries  []output.Entry
 }
 
+// ApplyOptions 控制 link 阶段的 dry-run 和高风险覆盖边界.
 type ApplyOptions struct {
 	DryRun               bool
 	ProtectedTargets     []string
 	AllowProtectedTarget bool
 }
 
+// Apply 逐个执行 [[link]] 配置, 并保留与输入顺序一致的日志条目.
 func Apply(links []config.LinkConfig, opts ApplyOptions) (Result, error) {
 	result := Result{}
 	for i, link := range links {
@@ -48,6 +51,8 @@ type change struct {
 	replaced bool
 }
 
+// applyOne 实现单个 link 的完整决策流程:
+// 校验 source, 处理 create/relink/force, 最终落到创建或替换 symlink.
 func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, bool, error) {
 	entry := output.Entry{Stage: "link", Target: link.Target, Source: link.Source}
 	if _, err := os.Stat(link.Source); err != nil {
@@ -209,6 +214,7 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	return entry, change{replaced: true}, false, nil
 }
 
+// isProtectedTarget 用来识别需要二次确认的危险覆盖目标.
 func isProtectedTarget(target string, protected []string) bool {
 	cleanedTarget := filepath.Clean(target)
 	if cleanedTarget == string(filepath.Separator) {

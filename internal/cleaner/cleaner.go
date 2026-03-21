@@ -10,18 +10,21 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// Result 汇总 clean 阶段的动作统计和输出条目.
 type Result struct {
 	Deleted int
 	Skipped int
 	Entries []output.Entry
 }
 
+// ApplyOptions 控制 clean 阶段的 dry-run 和高风险 clean 根路径豁免.
 type ApplyOptions struct {
 	DryRun          bool
 	ProtectedRoots  []string
 	AllowRiskyClean bool
 }
 
+// Apply 负责遍历 clean.paths, 识别 dead symlink, 并按保守边界决定是否删除.
 func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 	result := Result{}
 	for _, root := range cfg.Clean.Paths {
@@ -104,6 +107,8 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 	return result, nil
 }
 
+// maybeRemoveDeadLink 只处理“当前路径本身是 dead symlink”的情况.
+// 非 symlink 或目标仍然存在的路径都会被静默跳过.
 func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *output.Entry, deleted, skipped int, err error) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -145,6 +150,7 @@ func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *outpu
 	return &decision, 1, 0, nil
 }
 
+// isWithinBase 用 filepath.Rel 判断路径是否仍位于仓库 baseDir 内.
 func isWithinBase(path, baseDir string) bool {
 	rel, err := filepath.Rel(baseDir, path)
 	if err != nil {
@@ -156,6 +162,7 @@ func isWithinBase(path, baseDir string) bool {
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// riskyRootReason 识别需要确认的 clean 根路径, 例如 symlink root 或受保护目录.
 func riskyRootReason(root string, info os.FileInfo, protectedRoots []string) string {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "clean root is symlink"

@@ -7,11 +7,13 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// Result 汇总 create 阶段的动作统计和输出条目.
 type Result struct {
 	Created int
 	Entries []output.Entry
 }
 
+// Apply 按 [create].paths 的声明创建目录, 并同步产出执行日志条目.
 func Apply(paths []string, mode os.FileMode, dryRun bool) (Result, error) {
 	result := Result{}
 	for _, path := range paths {
