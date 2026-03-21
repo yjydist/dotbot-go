@@ -82,7 +82,31 @@ func TestRunCheckFailsOnExistingTargetConflict(t *testing.T) {
 	if !strings.Contains(stderr.String(), "target exists and force=false") {
 		t.Fatalf("stderr = %q, want conflict error", stderr.String())
 	}
+	if !strings.Contains(stdout.String(), ".gitconfig") || !strings.Contains(stdout.String(), "failed") {
+		t.Fatalf("stdout = %q, want failed entry detail before exit", stdout.String())
+	}
 	if strings.Contains(stdout.String(), "check ok") {
 		t.Fatalf("stdout = %q, should not report check ok", stdout.String())
+	}
+}
+
+func TestRunDryRunQuietKeepsFailureEntry(t *testing.T) {
+	fixture := newRunnerFixture(t, true)
+	if err := os.WriteFile(filepath.Join(fixture.homeDir, ".gitconfig"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fixture.writeConfig(t,
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"git/gitconfig\"",
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--dry-run", "--quiet"}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run(dry-run --quiet) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), ".gitconfig") || !strings.Contains(stdout.String(), "target exists and force=false") {
+		t.Fatalf("stdout = %q, want failed entry detail in quiet dry-run", stdout.String())
 	}
 }

@@ -9,17 +9,31 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
-func TestConfirmModelAcceptsEnter(t *testing.T) {
+func TestConfirmModelAcceptsExplicitY(t *testing.T) {
 	t.Parallel()
 
 	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
-	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 	if cmd == nil {
 		t.Fatal("Update() cmd = nil, want quit command")
 	}
 	result := updated.(confirmModel)
 	if !result.confirmed {
 		t.Fatal("Update() confirmed = false, want true")
+	}
+}
+
+func TestConfirmModelDoesNotAcceptEnter(t *testing.T) {
+	t.Parallel()
+
+	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd != nil {
+		t.Fatal("Update() cmd != nil, want no quit command on Enter")
+	}
+	result := updated.(confirmModel)
+	if result.confirmed {
+		t.Fatal("Update() confirmed = true, want false")
 	}
 }
 

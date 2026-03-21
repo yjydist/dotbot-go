@@ -48,7 +48,7 @@ func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "enter", "y":
+		case "y":
 			m.confirmed = true
 			return m, tea.Quit
 		case "esc", "q", "n", "ctrl+c":
@@ -82,12 +82,12 @@ func (m confirmModel) View() string {
 		),
 		m.viewport.View(),
 		m.styles.muted.Render(
-			fmt.Sprintf("%s/%s 滚动  •  %s/%s 顶部底部  •  %s 继续执行  •  %s 取消",
+			fmt.Sprintf("%s/%s 滚动  •  %s/%s 顶部底部  •  %s 确认  •  %s 取消",
 				m.styles.key.Render("j"),
 				m.styles.key.Render("k"),
 				m.styles.key.Render("g"),
 				m.styles.key.Render("G"),
-				m.styles.key.Render("Enter"),
+				m.styles.key.Render("y"),
 				m.styles.key.Render("Esc"),
 			),
 		),
@@ -100,7 +100,7 @@ func (m confirmModel) renderContent() string {
 		renderSized(m.styles.confirmPanel, m.width, strings.Join([]string{
 			"本次执行命中了高风险操作。",
 			fmt.Sprintf("风险项数量: %d", len(m.risks)),
-			"确认后将继续执行覆盖或清理动作, 取消则本次执行直接终止。",
+			"输入 y 才会继续执行覆盖或清理动作, 取消则本次执行直接终止。",
 		}, "\n")),
 	}
 	for _, risk := range m.risks {

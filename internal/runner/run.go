@@ -79,9 +79,11 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 	showReviewUI := shouldUseReviewUI(opts, stdin, stdout)
 	verboseLines := buildVerboseLines(*cfg)
+	// check 复用 dry-run 的执行路径, 包括失败时的逐项输出语义.
+	dryRun := opts.DryRun || opts.Check
 	outOpts := output.Options{
 		Mode:        opts.OutputMode,
-		DryRun:      opts.DryRun,
+		DryRun:      dryRun,
 		EnableColor: output.ColorEnabled(stdout, opts.NoColor),
 	}
 	if opts.OutputMode == output.ModeVerbose && !showReviewUI && !opts.DryRun && !opts.Check {
@@ -90,13 +92,14 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 
-	// check 复用 dry-run 的执行路径, 但在输出层只展示校验结果.
-	dryRun := opts.DryRun || opts.Check
 	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, dryRun)
 	if !opts.Check && !opts.DryRun {
 		output.WriteEntries(stdout, outOpts, createResult.Entries)
 	}
 	if err != nil {
+		if dryRun {
+			writeReviewFailure(stdout, outOpts, createResult.Entries)
+		}
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
@@ -129,6 +132,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		output.WriteEntries(stdout, outOpts, linkResult.Entries)
 	}
 	if err != nil {
+		if dryRun {
+			writeReviewFailure(stdout, outOpts, createResult.Entries, linkResult.Entries)
+		}
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
@@ -141,6 +147,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		output.WriteEntries(stdout, outOpts, cleanResult.Entries)
 	}
 	if err != nil {
+		if dryRun {
+			writeReviewFailure(stdout, outOpts, createResult.Entries, linkResult.Entries, cleanResult.Entries)
+		}
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}

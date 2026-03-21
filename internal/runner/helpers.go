@@ -77,7 +77,8 @@ func collectRiskyCleanRoots(roots, protectedRoots []string) []string {
 	return risky
 }
 
-// collectRiskItems 用于 dry-run/check 审阅界面, 它不会考虑 override 是否已显式放行.
+// collectRiskItems 用于 dry-run/check 审阅界面.
+// 即使 override 已显式放行, 这里也会保留风险项, 只是通过 Allowed 标注当前命令已经接管了风险.
 func collectRiskItems(opts Options, protectedTargets, riskyCleanRoots []string) []output.RiskItem {
 	items := make([]output.RiskItem, 0, len(protectedTargets)+len(riskyCleanRoots))
 	for _, target := range protectedTargets {
@@ -111,6 +112,22 @@ func collectConfirmRiskItems(opts Options, protectedTargets, riskyCleanRoots []s
 		}
 	}
 	return items
+}
+
+// writeReviewFailure 在 dry-run/check 提前失败时保留已收集到的逐项明细.
+// 这样用户即使没进入审阅界面, 也能看到失败前的动作和具体失败目标.
+func writeReviewFailure(stdout io.Writer, outOpts output.Options, groups ...[]output.Entry) {
+	entries := collectReviewEntries(groups...)
+	if len(entries) == 0 {
+		return
+	}
+	output.WriteEntries(stdout, outOpts, entries)
+
+	summary := output.Summary{}
+	for _, entry := range entries {
+		summary.Add(entry.Status)
+	}
+	output.WriteSummary(stdout, outOpts, summary)
 }
 
 // collectReviewEntries 会保留各阶段原有顺序, 方便 dry-run 审阅.
