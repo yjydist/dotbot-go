@@ -7,36 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-type ReviewMode string
-
-const (
-	ReviewModeDryRun ReviewMode = "dry-run"
-	ReviewModeCheck  ReviewMode = "check"
-)
-
-type StageCounts struct {
-	Create int
-	Link   int
-	Clean  int
-}
-
-type RiskItem struct {
-	Kind string
-	Path string
-}
-
-type ReviewData struct {
-	Mode         ReviewMode
-	ConfigPath   string
-	BaseDir      string
-	StageCounts  StageCounts
-	Entries      []Entry
-	Risks        []RiskItem
-	Summary      Summary
-	Result       string
-	VerboseLines []string
-}
-
+// WriteReviewText 是非交互环境下的审阅输出回退实现.
 func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 	if opts.Mode == ModeQuiet {
 		return
@@ -74,6 +45,7 @@ func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 	}
 }
 
+// RenderEntryTable 用纯文本表格展示 dry-run 的计划动作.
 func RenderEntryTable(entries []Entry) string {
 	headers := []string{"阶段", "目标", "来源", "动作", "备注"}
 	rows := make([][]string, 0, len(entries))
