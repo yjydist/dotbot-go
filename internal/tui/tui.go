@@ -15,7 +15,7 @@ import (
 const (
 	defaultWidth  = 100
 	defaultHeight = 28
-	minBodyWidth  = 56
+	minBodyWidth  = 12
 	maxBodyWidth  = 128
 )
 
@@ -117,8 +117,8 @@ func (m reviewModel) Init() tea.Cmd {
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = max(msg.Width, 60)
-		m.height = max(msg.Height, 16)
+		m.width = max(msg.Width, 1)
+		m.height = max(msg.Height, 1)
 		m.viewport.Width = m.bodyWidth()
 		m.viewport.Height = m.viewportHeight()
 		m.viewport.SetContent(m.renderContent())
@@ -183,7 +183,7 @@ func (m reviewModel) bodyWidth() int {
 }
 
 func (m reviewModel) viewportHeight() int {
-	return max(m.height-8, 6)
+	return max(m.height-8, 1)
 }
 
 func (m reviewModel) headerSummary() string {

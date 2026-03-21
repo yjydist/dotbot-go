@@ -69,3 +69,24 @@ func TestConfirmModelSupportsScrolling(t *testing.T) {
 		t.Fatal("YOffset = 0, want scroll down after j")
 	}
 }
+
+func TestConfirmModelShrinksToNarrowTerminal(t *testing.T) {
+	t.Parallel()
+
+	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 50, Height: 12})
+	result := updated.(confirmModel)
+
+	if got, want := result.width, 42; got != want {
+		t.Fatalf("width = %d, want %d", got, want)
+	}
+	if got, want := result.height, 8; got != want {
+		t.Fatalf("height = %d, want %d", got, want)
+	}
+	if got := result.width + result.styles.doc.GetHorizontalFrameSize(); got > 50 {
+		t.Fatalf("render width = %d, want <= 50", got)
+	}
+	if got := result.viewportHeight(); got > 12 {
+		t.Fatalf("viewport height = %d, want <= 12", got)
+	}
+}

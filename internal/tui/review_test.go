@@ -192,3 +192,24 @@ func TestReviewModelShowsAllowedRiskState(t *testing.T) {
 		t.Fatalf("View() = %q, want allowed check result hint", view)
 	}
 }
+
+func TestReviewModelShrinksToNarrowTerminal(t *testing.T) {
+	t.Parallel()
+
+	model := newReviewModel(sampleDryRunReviewData(), true)
+	updated, _ := model.Update(tea.WindowSizeMsg{Width: 50, Height: 12})
+	result := updated.(reviewModel)
+
+	if got, want := result.width, 50; got != want {
+		t.Fatalf("width = %d, want %d", got, want)
+	}
+	if got, want := result.height, 12; got != want {
+		t.Fatalf("height = %d, want %d", got, want)
+	}
+	if got := result.bodyWidth() + result.styles.doc.GetHorizontalFrameSize(); got > 50 {
+		t.Fatalf("render width = %d, want <= 50", got)
+	}
+	if got := result.viewportHeight(); got > 12 {
+		t.Fatalf("viewport height = %d, want <= 12", got)
+	}
+}

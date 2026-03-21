@@ -40,8 +40,8 @@ func (m confirmModel) Init() tea.Cmd {
 func (m confirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = clamp(msg.Width-8, 56, 92)
-		m.height = max(msg.Height-4, 12)
+		m.width = clamp(msg.Width-8, 12, 92)
+		m.height = max(msg.Height-4, 1)
 		m.viewport.Width = m.width
 		m.viewport.Height = m.viewportHeight()
 		m.viewport.SetContent(m.renderContent())
@@ -110,7 +110,7 @@ func (m confirmModel) renderContent() string {
 }
 
 func (m confirmModel) viewportHeight() int {
-	return max(m.height-6, 6)
+	return max(m.height-6, 1)
 }
 
 func RunConfirm(stdin io.Reader, stdout io.Writer, noColor bool, risks []output.RiskItem) error {
