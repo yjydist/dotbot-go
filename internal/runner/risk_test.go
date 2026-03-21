@@ -61,6 +61,43 @@ func TestRunDryRunMarksProtectedTargetConfirmation(t *testing.T) {
 	}
 }
 
+func TestRunDryRunMarksProtectedRelinkConfirmation(t *testing.T) {
+	fixture := newRunnerFixture(t, false)
+	oldSource := filepath.Join(fixture.baseDir, "old.txt")
+	newSource := filepath.Join(fixture.baseDir, "new.txt")
+	target := fixture.homeDir
+	if err := os.WriteFile(oldSource, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newSource, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(oldSource, target); err != nil {
+		t.Fatal(err)
+	}
+	fixture.writeConfig(t,
+		"[[link]]",
+		fmt.Sprintf("target = %q", target),
+		fmt.Sprintf("source = %q", newSource),
+		"relink = true",
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--dry-run", "--config", fixture.configPath}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "replace protected target") {
+		t.Fatalf("stdout = %q, want protected relink risk summary", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "protected target, confirmation required") {
+		t.Fatalf("stdout = %q, want protected relink confirmation hint", stdout.String())
+	}
+}
+
 func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
 	baseDir := t.TempDir()
 	configDir := t.TempDir()
@@ -165,6 +202,59 @@ func TestRunUsesConfirmUIForRiskyOperationsWhenInteractive(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("confirm UI not called")
+	}
+}
+
+func TestRunUsesConfirmUIForProtectedRelinkWhenInteractive(t *testing.T) {
+	fixture := newRunnerFixture(t, false)
+	oldSource := filepath.Join(fixture.baseDir, "old.txt")
+	newSource := filepath.Join(fixture.baseDir, "new.txt")
+	target := fixture.homeDir
+	if err := os.WriteFile(oldSource, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(newSource, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(oldSource, target); err != nil {
+		t.Fatal(err)
+	}
+	fixture.writeConfig(t,
+		"[[link]]",
+		fmt.Sprintf("target = %q", target),
+		fmt.Sprintf("source = %q", newSource),
+		"relink = true",
+	)
+
+	called := false
+	withRunnerHooks(t,
+		func(io.Reader, io.Writer) bool { return true },
+		nil,
+		func(stdin io.Reader, stdout io.Writer, noColor bool, risks []output.RiskItem) error {
+			called = true
+			if len(risks) != 1 {
+				t.Fatalf("confirm risks = %d, want 1", len(risks))
+			}
+			if risks[0].Kind != "replace protected target" {
+				t.Fatalf("risk kind = %q, want protected target", risks[0].Kind)
+			}
+			if risks[0].Path != target {
+				t.Fatalf("risk path = %q, want %q", risks[0].Path, target)
+			}
+			return fmt.Errorf("stop after confirm")
+		},
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--config", fixture.configPath}, strings.NewReader(""), &stdout, &stderr), 1; got != want {
+		t.Fatalf("Run() = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !called {
+		t.Fatal("confirm UI not called for protected relink")
 	}
 }
 

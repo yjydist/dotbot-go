@@ -39,11 +39,17 @@ func collectProtectedTargets(links []config.LinkConfig, protectedTargets []strin
 	seen := map[string]struct{}{}
 	var risky []string
 	for _, link := range links {
-		if !link.Force {
+		if !link.Force && !link.Relink {
 			continue
 		}
 		if !linkerProtectedTarget(link.Target, protectedTargets) {
 			continue
+		}
+		if link.Relink && !link.Force {
+			info, err := os.Lstat(link.Target)
+			if err != nil || info.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
 		}
 		target := filepath.Clean(link.Target)
 		if _, ok := seen[target]; ok {
