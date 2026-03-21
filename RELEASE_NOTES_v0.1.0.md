@@ -1,0 +1,40 @@
+# dotbot-go v0.1.0
+
+## 版本定位
+
+`v0.1.0` 是 `dotbot-go` 的首个可用版本.
+
+当前版本已经具备 `dotfiles` 管理所需的核心能力, 包括配置解析, 严格校验, 目录创建, 符号链接创建, 失效链接清理, `dry-run`, `check`, 以及基础输出与错误处理.
+
+## 核心能力
+
+- 使用 TOML 作为声明式配置格式
+- 支持 `link`, `create`, `clean`, `default`
+- 支持 `--dry-run` 预览计划动作
+- 支持 `--check` 做纯校验, 不修改文件系统
+- 支持 `--verbose`, `--quiet`, `--no-color`
+- 支持 `~` 路径展开
+- 严格校验未知字段, 非法值, 重复 `target`
+
+## 当前范围
+
+- 只支持 `symlink`
+- 第一版目标平台为 macOS 和 Linux
+- 不支持 `plugin`
+- 不支持 `shell`
+- 不支持 `glob`
+- 不支持环境变量展开
+- 失败即停, 不承诺回滚
+
+## 文档与约束
+
+- `README.md` 提供使用说明与示例
+- `DESIGN.md` 固化设计决策
+- `CONSTRAINTS.md` 说明关键取舍
+- `AGENTS.md` 约束编码阶段工作方式
+
+## 后续方向
+
+- 继续打磨 `--verbose` 输出细节
+- 评估 `fmt` 或其他辅助能力
+- 评估 Windows 支持策略
