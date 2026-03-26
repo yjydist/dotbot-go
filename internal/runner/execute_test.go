@@ -9,6 +9,7 @@ import (
 )
 
 func TestRunLoadsDefaultConfig(t *testing.T) {
+	// 不显式传 -c 时, runner 应自动加载当前目录默认配置文件.
 	fixture := newRunnerFixture(t, true)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -30,6 +31,7 @@ func TestRunLoadsDefaultConfig(t *testing.T) {
 }
 
 func TestRunQuietSuppressesSuccessOutput(t *testing.T) {
+	// quiet 在真实执行模式下也应该压掉成功条目和 summary.
 	fixture := newRunnerFixture(t, true)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -48,6 +50,7 @@ func TestRunQuietSuppressesSuccessOutput(t *testing.T) {
 }
 
 func TestRunQuietStillPrintsFailure(t *testing.T) {
+	// quiet 不能吞掉失败, 否则脚本场景很难定位执行错误.
 	fixture := newRunnerFixture(t, false)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -66,6 +69,7 @@ func TestRunQuietStillPrintsFailure(t *testing.T) {
 }
 
 func TestRunVerboseShowsConfigDetails(t *testing.T) {
+	// verbose 要补充配置路径, base dir, 生效配置和阶段统计.
 	fixture := newRunnerFixture(t, true)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -89,7 +93,33 @@ func TestRunVerboseShowsConfigDetails(t *testing.T) {
 	}
 }
 
+func TestRunVerboseShowsPerLinkDetailsWhenValuesMixed(t *testing.T) {
+	fixture := newRunnerFixture(t, true)
+	if err := os.WriteFile(filepath.Join(fixture.baseDir, "git", "zshrc"), []byte("export ZDOTDIR"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fixture.writeConfig(t,
+		"[[link]]",
+		"target = \"~/.gitconfig\"",
+		"source = \"git/gitconfig\"",
+		"create = true",
+		"[[link]]",
+		"target = \"~/.zshrc\"",
+		"source = \"git/zshrc\"",
+	)
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if got, want := run([]string{"--verbose"}, strings.NewReader(""), &stdout, &stderr), 0; got != want {
+		t.Fatalf("Run(verbose) = %d, want %d, stderr=%q", got, want, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "link[1]: target=") || !strings.Contains(stdout.String(), "link[2]: target=") {
+		t.Fatalf("stdout = %q, want per-link verbose details", stdout.String())
+	}
+}
+
 func TestRunAllowsProtectedTargetWithOverride(t *testing.T) {
+	// 显式 override 时, 受保护目标应该允许继续执行, 不再弹确认 UI.
 	baseDir := t.TempDir()
 	parentDir := t.TempDir()
 	configPath := filepath.Join(parentDir, "dotbot-go.toml")
@@ -121,6 +151,7 @@ func TestRunAllowsProtectedTargetWithOverride(t *testing.T) {
 	}
 }
 
+// quote 只在测试里生成 TOML 字符串字面量, 避免每个用例重复写转义.
 func quote(v string) string {
 	return "\"" + v + "\""
 }

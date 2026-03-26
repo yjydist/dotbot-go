@@ -7,6 +7,7 @@ import (
 )
 
 func TestRunHelp(t *testing.T) {
+	// help 是最基础的 CLI 契约, 需要稳定返回 0 并输出帮助文本.
 	t.Parallel()
 
 	var stdout bytes.Buffer
@@ -23,6 +24,7 @@ func TestRunHelp(t *testing.T) {
 }
 
 func TestRunRejectsVerboseQuietTogether(t *testing.T) {
+	// verbose 和 quiet 互斥, 必须在参数阶段就直接失败.
 	t.Parallel()
 
 	var stdout bytes.Buffer
@@ -36,6 +38,7 @@ func TestRunRejectsVerboseQuietTogether(t *testing.T) {
 }
 
 func TestRunMissingConfigReturnsConfigError(t *testing.T) {
+	// 缺默认配置文件时应返回配置错误码, 不是运行时错误码.
 	fixture := newRunnerFixture(t, false)
 	_ = fixture
 

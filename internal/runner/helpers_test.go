@@ -5,9 +5,11 @@ import (
 	"testing"
 
 	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/output"
 )
 
-func TestBuildVerboseLinesUsesEffectiveCreateAndCleanConfig(t *testing.T) {
+func TestBuildConfigGroupsUsesEffectiveCreateAndCleanConfig(t *testing.T) {
+	// verbose 区块必须展示最终生效值, 不是 default 原始值.
 	t.Parallel()
 
 	cfg := config.Config{
@@ -23,20 +25,25 @@ func TestBuildVerboseLinesUsesEffectiveCreateAndCleanConfig(t *testing.T) {
 		},
 	}
 
-	lines := buildVerboseLines(cfg)
-	got := strings.Join(lines, "\n")
+	groups := buildConfigGroups(cfg)
+	got := strings.Join([]string{
+		output.RenderConfigGroup(groups[0]),
+		output.RenderConfigGroup(groups[1]),
+		output.RenderConfigGroup(groups[2]),
+	}, "\n")
 	if !strings.Contains(got, "create: mode=0755") {
-		t.Fatalf("buildVerboseLines() = %q, want effective create mode", got)
+		t.Fatalf("buildConfigGroups() = %q, want effective create mode", got)
 	}
 	if !strings.Contains(got, "clean: force=true recursive=true") {
-		t.Fatalf("buildVerboseLines() = %q, want effective clean config", got)
+		t.Fatalf("buildConfigGroups() = %q, want effective clean config", got)
 	}
 	if !strings.Contains(got, "link: create=true relink=false force=false relative=false ignore_missing=true") {
-		t.Fatalf("buildVerboseLines() = %q, want effective link config", got)
+		t.Fatalf("buildConfigGroups() = %q, want effective link config", got)
 	}
 }
 
-func TestBuildVerboseLinesMarksMixedLinkValues(t *testing.T) {
+func TestBuildConfigGroupsMarksMixedLinkValues(t *testing.T) {
+	// 当不同 [[link]] 的生效布尔值不一致时, 摘要要明确标成 mixed.
 	t.Parallel()
 
 	cfg := config.Config{
@@ -49,8 +56,12 @@ func TestBuildVerboseLinesMarksMixedLinkValues(t *testing.T) {
 		},
 	}
 
-	lines := buildVerboseLines(cfg)
-	if got := lines[0]; got != "link: mixed per-link values" {
-		t.Fatalf("buildVerboseLines() first line = %q, want mixed summary", got)
+	groups := buildConfigGroups(cfg)
+	if got := output.RenderConfigGroup(groups[0]); got != "link: mixed per-link values" {
+		t.Fatalf("buildConfigGroups() first group = %q, want mixed summary", got)
+	}
+	joined := strings.Join([]string{output.RenderConfigGroup(groups[3]), output.RenderConfigGroup(groups[4])}, "\n")
+	if !strings.Contains(joined, "link[1]: target=") || !strings.Contains(joined, "link[2]: target=") {
+		t.Fatalf("buildConfigGroups() = %q, want per-link details for mixed values", joined)
 	}
 }

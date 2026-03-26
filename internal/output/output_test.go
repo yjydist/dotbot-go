@@ -7,6 +7,7 @@ import (
 )
 
 func TestFormatEntry(t *testing.T) {
+	// 普通成功输出的字段顺序和基本对齐是所有文本日志的基线.
 	t.Parallel()
 
 	got := FormatEntry(Options{DryRun: true}, Entry{
@@ -28,6 +29,7 @@ func TestFormatEntry(t *testing.T) {
 }
 
 func TestFormatEntryDryRunFailureUsesFailPrefix(t *testing.T) {
+	// 失败优先级必须高于 dry-run, 否则预览失败会被伪装成普通计划项.
 	t.Parallel()
 
 	got := FormatEntry(Options{DryRun: true}, Entry{
@@ -46,6 +48,7 @@ func TestFormatEntryDryRunFailureUsesFailPrefix(t *testing.T) {
 }
 
 func TestFormatEntryKeepsCJKColumnsAligned(t *testing.T) {
+	// 中文路径下的列宽计算要按终端 cell width, 不能只按 rune 数.
 	t.Parallel()
 
 	got := FormatEntry(Options{}, Entry{
@@ -64,6 +67,7 @@ func TestFormatEntryKeepsCJKColumnsAligned(t *testing.T) {
 }
 
 func TestFormatEntryWithColor(t *testing.T) {
+	// 启用颜色时, 前缀应该带 ANSI 包装而不影响内容本身.
 	t.Parallel()
 
 	got := FormatEntry(Options{EnableColor: true}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
@@ -73,6 +77,7 @@ func TestFormatEntryWithColor(t *testing.T) {
 }
 
 func TestWriteEntriesQuietOnlyPrintsFailure(t *testing.T) {
+	// quiet 模式只能保留失败项, 这是终端输出层最强的降噪约束.
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -90,6 +95,7 @@ func TestWriteEntriesQuietOnlyPrintsFailure(t *testing.T) {
 }
 
 func TestFormatEntryNoColor(t *testing.T) {
+	// no-color 必须彻底关闭 ANSI 前缀, 方便重定向和日志采集.
 	t.Parallel()
 
 	got := FormatEntry(Options{EnableColor: false}, Entry{Stage: "create", Target: "~/.cache/zsh", Decision: "created", Status: StatusCreated})
@@ -99,6 +105,7 @@ func TestFormatEntryNoColor(t *testing.T) {
 }
 
 func TestRenderEntryTable(t *testing.T) {
+	// 非交互审阅文本需要稳定表格布局, 这条用例锁住表头和内容基本形态.
 	t.Parallel()
 
 	got := RenderEntryTable([]Entry{
@@ -117,6 +124,7 @@ func TestRenderEntryTable(t *testing.T) {
 }
 
 func TestWriteReviewTextDryRun(t *testing.T) {
+	// 非交互 dry-run 回退文本需要包含概览, 风险, 明细和摘要.
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -148,6 +156,7 @@ func TestWriteReviewTextDryRun(t *testing.T) {
 }
 
 func TestWriteReviewTextCheck(t *testing.T) {
+	// check 模式只展示摘要, 不应该退化成完整计划动作列表.
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -172,6 +181,7 @@ func TestWriteReviewTextCheck(t *testing.T) {
 }
 
 func TestWriteReviewTextShowsAllowedRiskState(t *testing.T) {
+	// 已放行风险不能被隐藏, 但也不能继续写成“仍需确认”.
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -186,6 +196,7 @@ func TestWriteReviewTextShowsAllowedRiskState(t *testing.T) {
 }
 
 func TestWriteReviewTextVerboseFiltersInactiveStages(t *testing.T) {
+	// verbose 审阅文本只显示本次真正参与执行的阶段配置摘要.
 	t.Parallel()
 
 	var buf bytes.Buffer
@@ -194,10 +205,11 @@ func TestWriteReviewTextVerboseFiltersInactiveStages(t *testing.T) {
 		ConfigPath:  "/repo/dotbot-go.toml",
 		BaseDir:     "/repo",
 		StageCounts: StageCounts{Link: 1},
-		VerboseLines: []string{
-			"link: create=false relink=false force=false relative=false ignore_missing=false",
-			"create: mode=0777",
-			"clean: force=true recursive=true",
+		ConfigGroups: []ConfigGroup{
+			{Scope: "link", Fields: []ConfigField{{Key: "create", Value: "false"}, {Key: "relink", Value: "false"}, {Key: "force", Value: "false"}, {Key: "relative", Value: "false"}, {Key: "ignore_missing", Value: "false"}}},
+			{Scope: "link[1]", Fields: []ConfigField{{Key: "target", Value: "/tmp/a"}, {Key: "create", Value: "false"}, {Key: "relink", Value: "false"}, {Key: "force", Value: "false"}, {Key: "relative", Value: "false"}, {Key: "ignore_missing", Value: "false"}}},
+			{Scope: "create", Fields: []ConfigField{{Key: "mode", Value: "0777"}}},
+			{Scope: "clean", Fields: []ConfigField{{Key: "force", Value: "true"}, {Key: "recursive", Value: "true"}}},
 		},
 	})
 
@@ -205,12 +217,16 @@ func TestWriteReviewTextVerboseFiltersInactiveStages(t *testing.T) {
 	if !strings.Contains(got, "link: create=false") {
 		t.Fatalf("WriteReviewText() = %q, want active link summary", got)
 	}
+	if !strings.Contains(got, "link[1]: target=/tmp/a") {
+		t.Fatalf("WriteReviewText() = %q, want active per-link summary", got)
+	}
 	if strings.Contains(got, "create: mode=0777") || strings.Contains(got, "clean: force=true") {
 		t.Fatalf("WriteReviewText() = %q, should not include inactive stage summaries", got)
 	}
 }
 
 func TestDisplayWidthTreatsCJKAsTerminalCells(t *testing.T) {
+	// CJK 宽度计算是文本输出和 TUI 共同依赖的基础能力.
 	t.Parallel()
 
 	if got, want := displayWidth("阶段"), 4; got != want {

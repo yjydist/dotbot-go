@@ -10,6 +10,7 @@ import (
 )
 
 func TestApplyCreatesSymlink(t *testing.T) {
+	// 基线用例: 缺失 target 时会创建 symlink.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -36,6 +37,7 @@ func TestApplyCreatesSymlink(t *testing.T) {
 }
 
 func TestApplyForceReplacesFile(t *testing.T) {
+	// force=true 时允许用新 symlink 覆盖已有普通文件.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -61,6 +63,7 @@ func TestApplyForceReplacesFile(t *testing.T) {
 }
 
 func TestApplyIgnoreMissingSkips(t *testing.T) {
+	// ignore_missing=true 会把缺失 source 从失败降级成 skip.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -77,6 +80,7 @@ func TestApplyIgnoreMissingSkips(t *testing.T) {
 }
 
 func TestApplyDryRunDetectsExistingTargetConflictWithCreate(t *testing.T) {
+	// dry-run 也必须暴露 target 冲突, 不能因为不写文件就静默通过.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -106,6 +110,7 @@ func TestApplyDryRunDetectsExistingTargetConflictWithCreate(t *testing.T) {
 }
 
 func TestApplyForceRejectsProtectedTarget(t *testing.T) {
+	// 受保护目标即使 force=true 也不能绕过 runner 的确认模型.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -136,6 +141,7 @@ func TestApplyForceRejectsProtectedTarget(t *testing.T) {
 }
 
 func TestApplyDryRunMarksProtectedTargetConfirmation(t *testing.T) {
+	// dry-run 要把危险覆盖明确标成“需要确认”, 方便用户预审.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -161,6 +167,7 @@ func TestApplyDryRunMarksProtectedTargetConfirmation(t *testing.T) {
 }
 
 func TestApplyRelinkReplacesExistingSymlink(t *testing.T) {
+	// relink=true 的核心语义是替换现有 symlink 指向, 不需要 force.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -194,6 +201,7 @@ func TestApplyRelinkReplacesExistingSymlink(t *testing.T) {
 }
 
 func TestApplyRelativeCreatesRelativeSymlink(t *testing.T) {
+	// relative=true 时实际落盘的 link target 必须是相对路径, 不是绝对 source.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -232,6 +240,7 @@ func TestApplyRelativeCreatesRelativeSymlink(t *testing.T) {
 }
 
 func TestApplyRelinkRejectsProtectedSymlinkWithoutOverride(t *testing.T) {
+	// 受保护 symlink 在 relink 路径下也必须经过确认护栏.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -266,5 +275,145 @@ func TestApplyRelinkRejectsProtectedSymlinkWithoutOverride(t *testing.T) {
 	}
 	if got, want := gotTarget, oldSource; got != want {
 		t.Fatalf("Readlink() = %q, want %q", got, want)
+	}
+}
+
+func TestApplyForceAllowsProtectedTargetWithOverride(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(baseDir, "target-dir")
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source, Force: true}}, ApplyOptions{
+		ProtectedTargets:     []string{target},
+		AllowProtectedTarget: true,
+	})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if got, want := result.Replaced, 1; got != want {
+		t.Fatalf("Result.Replaced = %d, want %d", got, want)
+	}
+	gotTarget, readErr := os.Readlink(target)
+	if readErr != nil {
+		t.Fatalf("Readlink() error = %v", readErr)
+	}
+	if got, want := gotTarget, source; got != want {
+		t.Fatalf("Readlink() = %q, want %q", got, want)
+	}
+}
+
+func TestApplyCheckFailsWhenTargetParentIsNotWritable(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	lockedRoot := filepath.Join(baseDir, "locked")
+	source := filepath.Join(baseDir, "source.txt")
+	if err := os.MkdirAll(lockedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockedRoot, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(lockedRoot, 0o755)
+	})
+
+	target := filepath.Join(lockedRoot, "target.txt")
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source}}, ApplyOptions{Check: true})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want error")
+	}
+	if got, want := len(result.Entries), 1; got != want {
+		t.Fatalf("len(Result.Entries) = %d, want %d", got, want)
+	}
+	if got, want := result.Entries[0].Status, output.StatusFailed; got != want {
+		t.Fatalf("Result.Entries[0].Status = %q, want %q", got, want)
+	}
+}
+
+func TestApplyCheckSkipsMatchingSymlinkEvenWhenParentIsReadOnly(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	lockedRoot := filepath.Join(baseDir, "locked")
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(lockedRoot, "target.txt")
+	if err := os.MkdirAll(lockedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockedRoot, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(lockedRoot, 0o755)
+	})
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source}}, ApplyOptions{Check: true})
+	if err != nil {
+		t.Fatalf("Apply() error = %v", err)
+	}
+	if got, want := result.Skipped, 0; got != want {
+		t.Fatalf("Result.Skipped = %d, want %d because matching symlink does not increment skipped counter here", got, want)
+	}
+	if got, want := len(result.Entries), 1; got != want {
+		t.Fatalf("len(Result.Entries) = %d, want %d", got, want)
+	}
+	if got, want := result.Entries[0].Status, output.StatusSkipped; got != want {
+		t.Fatalf("Result.Entries[0].Status = %q, want %q", got, want)
+	}
+	if got, want := result.Entries[0].Message, "symlink already matches"; got != want {
+		t.Fatalf("Result.Entries[0].Message = %q, want %q", got, want)
+	}
+}
+
+func TestApplyCheckReportsConflictBeforeParentPermissionError(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+	lockedRoot := filepath.Join(baseDir, "locked")
+	source := filepath.Join(baseDir, "source.txt")
+	target := filepath.Join(lockedRoot, "target.txt")
+	if err := os.MkdirAll(lockedRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockedRoot, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chmod(lockedRoot, 0o755)
+	})
+
+	result, err := Apply([]config.LinkConfig{{Target: target, Source: source}}, ApplyOptions{Check: true})
+	if err == nil {
+		t.Fatal("Apply() error = nil, want error")
+	}
+	if got, want := len(result.Entries), 1; got != want {
+		t.Fatalf("len(Result.Entries) = %d, want %d", got, want)
+	}
+	if got, want := result.Entries[0].Message, "target exists and force=false"; got != want {
+		t.Fatalf("Result.Entries[0].Message = %q, want %q", got, want)
 	}
 }

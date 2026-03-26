@@ -13,6 +13,7 @@ import (
 )
 
 func TestRunRejectsProtectedTargetWithoutOverrideInNonInteractiveMode(t *testing.T) {
+	// 非交互环境命中受保护目标时, 必须要求显式 override.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -36,6 +37,7 @@ func TestRunRejectsProtectedTargetWithoutOverrideInNonInteractiveMode(t *testing
 }
 
 func TestRunDryRunMarksProtectedTargetConfirmation(t *testing.T) {
+	// dry-run 要提前暴露受保护目标风险, 方便用户在真正执行前预审.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -62,6 +64,7 @@ func TestRunDryRunMarksProtectedTargetConfirmation(t *testing.T) {
 }
 
 func TestRunDryRunMarksProtectedRelinkConfirmation(t *testing.T) {
+	// 受保护 symlink 的 relink 路径也必须在 dry-run 里标记成高风险.
 	fixture := newRunnerFixture(t, false)
 	oldSource := filepath.Join(fixture.baseDir, "old.txt")
 	newSource := filepath.Join(fixture.baseDir, "new.txt")
@@ -99,6 +102,7 @@ func TestRunDryRunMarksProtectedRelinkConfirmation(t *testing.T) {
 }
 
 func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
+	// 显式 allow-risky-clean 后, 仓库外 dead target 的 risky clean 应允许继续.
 	baseDir := t.TempDir()
 	configDir := t.TempDir()
 	homeDir := filepath.Join(baseDir, "home")
@@ -132,6 +136,7 @@ func TestRunAllowsRiskyCleanWithOverride(t *testing.T) {
 }
 
 func TestRunRejectsRiskyCleanWithoutOverrideInNonInteractiveMode(t *testing.T) {
+	// 非交互环境命中 risky clean root 时, 必须阻止执行并保留原始 dead link.
 	baseDir := t.TempDir()
 	configDir := t.TempDir()
 	homeDir := filepath.Join(baseDir, "home")
@@ -167,6 +172,7 @@ func TestRunRejectsRiskyCleanWithoutOverrideInNonInteractiveMode(t *testing.T) {
 }
 
 func TestRunUsesConfirmUIForRiskyOperationsWhenInteractive(t *testing.T) {
+	// 交互环境命中高风险覆盖时, runner 应交给 confirm UI 而不是直接执行.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -206,6 +212,7 @@ func TestRunUsesConfirmUIForRiskyOperationsWhenInteractive(t *testing.T) {
 }
 
 func TestRunUsesConfirmUIForProtectedRelinkWhenInteractive(t *testing.T) {
+	// 受保护 symlink 的 relink 风险也必须进入同一套确认 UI.
 	fixture := newRunnerFixture(t, false)
 	oldSource := filepath.Join(fixture.baseDir, "old.txt")
 	newSource := filepath.Join(fixture.baseDir, "new.txt")
@@ -259,6 +266,7 @@ func TestRunUsesConfirmUIForProtectedRelinkWhenInteractive(t *testing.T) {
 }
 
 func TestRunSkipsConfirmUIWhenOverrideProvided(t *testing.T) {
+	// 已显式 override 后, 交互执行不应再重复弹确认 UI.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -288,6 +296,7 @@ func TestRunSkipsConfirmUIWhenOverrideProvided(t *testing.T) {
 }
 
 func TestRunStopsWithoutSideEffectsWhenConfirmRejected(t *testing.T) {
+	// 用户拒绝确认后, runner 必须终止且不能留下任何覆盖副作用.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -329,6 +338,7 @@ func TestRunStopsWithoutSideEffectsWhenConfirmRejected(t *testing.T) {
 }
 
 func TestRunLeavesDeadLinkWhenRiskyCleanConfirmRejected(t *testing.T) {
+	// risky clean 被拒绝确认后, 原始 dead link 必须原样保留.
 	baseDir := t.TempDir()
 	configDir := t.TempDir()
 	homeDir := filepath.Join(baseDir, "home")

@@ -8,6 +8,7 @@ import (
 )
 
 func TestReviewModelPanelsStayWithinWidth(t *testing.T) {
+	// 常规宽度下, overview/risk/summary/card 都不应突破各自外框宽度.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)
@@ -37,6 +38,7 @@ func TestReviewModelPanelsStayWithinWidth(t *testing.T) {
 }
 
 func TestReviewModelPanelsStayWithinWidthWithCJK(t *testing.T) {
+	// 中文路径是最容易把宽度计算打崩的输入, 这条用例专门卡住它.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)
@@ -64,6 +66,7 @@ func TestReviewModelPanelsStayWithinWidthWithCJK(t *testing.T) {
 }
 
 func TestWrapTextRespectsDisplayWidthForCJK(t *testing.T) {
+	// wrapText 必须按终端 cell width 切行, 否则中文宽度会低估.
 	t.Parallel()
 
 	lines := wrapText("这是一个非常长的中文路径用于验证宽度换行是否正确", 10)
@@ -75,6 +78,7 @@ func TestWrapTextRespectsDisplayWidthForCJK(t *testing.T) {
 }
 
 func TestReviewOverviewTableWrapsLongValuesIntoSeparateRows(t *testing.T) {
+	// overview 表格在长值场景下需要拆行, 不能把多行内容硬塞进单个 cell.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)
@@ -95,6 +99,7 @@ func TestReviewOverviewTableWrapsLongValuesIntoSeparateRows(t *testing.T) {
 }
 
 func TestReviewPanelsStayWithinVeryNarrowWidth(t *testing.T) {
+	// 很窄的终端里也必须优先保证“不溢出”, 再谈样式.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)
@@ -118,6 +123,7 @@ func TestReviewPanelsStayWithinVeryNarrowWidth(t *testing.T) {
 }
 
 func TestReviewPanelsStayWithinUltraNarrowWidth(t *testing.T) {
+	// 极窄终端是 TUI 最容易回归的边界, 需要专门有一条极限用例.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)

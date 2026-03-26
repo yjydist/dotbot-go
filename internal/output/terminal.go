@@ -10,6 +10,7 @@ import (
 )
 
 // WriteEntries 输出 create/link/clean 每一条执行记录.
+// quiet 模式只保留失败项, 其他模式都尽量保持“按执行顺序吐出条目”.
 func WriteEntries(w io.Writer, opts Options, entries []Entry) {
 	for _, entry := range entries {
 		if opts.Mode == ModeQuiet && entry.Status != StatusFailed {
@@ -28,6 +29,7 @@ func WriteSummary(w io.Writer, opts Options, summary Summary) {
 }
 
 // FormatEntry 负责把单条执行记录格式化成统一的终端输出.
+// 这里是普通终端输出的唯一格式化入口, 所以 dry-run、失败优先级、颜色映射都集中在这里处理.
 func FormatEntry(opts Options, entry Entry) string {
 	prefix := "[ok]"
 	if entry.Status == StatusFailed {

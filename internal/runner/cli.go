@@ -12,10 +12,13 @@ import (
 )
 
 // parseFlags 只负责参数语义, 不做任何配置加载或文件系统检查.
+// 这样 CLI 错误会在进入真正执行流程前就被截断, 不会和运行时错误混在一起.
 func parseFlags(args []string, stdout, stderr io.Writer) (Options, bool, int, error) {
 	opts := Options{}
 	normalizedArgs := normalizeArgs(args)
 	for _, arg := range normalizedArgs {
+		// Go 的 flag 包会把 -h 视为特殊输入, 这里先手动拦截,
+		// 让 --help / -help / -h 都走同一套帮助输出分支.
 		if arg == "-h" || arg == "-help" {
 			writeHelp(stdout)
 			return Options{}, true, exitSuccess, nil
@@ -63,6 +66,7 @@ func parseFlags(args []string, stdout, stderr io.Writer) (Options, bool, int, er
 }
 
 // normalizeArgs 把 --long 形式归一到 flag 包可识别的 -long 形式.
+// 这样可以继续使用标准库 flag, 同时又不牺牲常见的 GNU 风格参数写法.
 func normalizeArgs(args []string) []string {
 	normalized := make([]string, 0, len(args))
 	for _, arg := range args {
@@ -76,6 +80,7 @@ func normalizeArgs(args []string) []string {
 }
 
 // writeHelp 只关心用户可见的 CLI 帮助文本, 与执行逻辑解耦.
+// 这里刻意保持“帮助文案就是契约”的思路, 所以新参数和新行为都应该同步到这里.
 func writeHelp(w io.Writer) {
 	fmt.Fprintln(w, "dotbot-go - 面向类 Unix 系统的声明式 dotfiles 管理工具")
 	fmt.Fprintln(w)

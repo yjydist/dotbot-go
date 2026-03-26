@@ -578,8 +578,10 @@ relative = false
 
 #### `clean.paths` 为符号链接
 
-- 直接报错
-- 不跟随目录符号链接作为清理根路径
+- 视为高风险 clean root
+- dry-run 和 check 必须明确标记需要确认
+- 正式执行时, 交互环境需要确认, 非交互环境需要 `--allow-risky-clean`
+- 一旦放行, 扫描解析后的实体目录, 不直接把符号链接路径本身当作目录读取
 
 #### 权限不足
 
@@ -724,6 +726,7 @@ summary: created=1 linked=1 skipped=1 replaced=0 deleted=1 failed=0
 
 - 普通执行模式下保持原有额外文本信息
 - 审阅界面展示当前实际生效配置, 文本回退在 `--verbose` 下额外展示生效配置摘要
+- 当 `[[link]]` 的生效布尔值彼此不一致时, `--verbose` 额外补充逐项摘要, 方便排查 mixed 配置
 - 不再要求在 `--dry-run` / `--check` 前单独打印一段前置文本块
 
 #### `--quiet`

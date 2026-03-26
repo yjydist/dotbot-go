@@ -10,6 +10,7 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// withRunnerHooks 允许测试替换终端探测和 TUI 入口, 避免真正依赖交互终端.
 func withRunnerHooks(
 	t *testing.T,
 	interactive func(io.Reader, io.Writer) bool,
@@ -36,6 +37,8 @@ func withRunnerHooks(
 	})
 }
 
+// runnerFixture 是 runner 测试最常用的环境夹具:
+// 独立工作目录, fake HOME, 配置文件路径, 以及可选的源文件树.
 type runnerFixture struct {
 	baseDir    string
 	configPath string

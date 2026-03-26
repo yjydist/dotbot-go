@@ -10,6 +10,7 @@ import (
 )
 
 func TestConfirmModelAcceptsExplicitY(t *testing.T) {
+	// 确认界面只有显式输入 y 才能继续, 默认不是回车确认.
 	t.Parallel()
 
 	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
@@ -24,6 +25,7 @@ func TestConfirmModelAcceptsExplicitY(t *testing.T) {
 }
 
 func TestConfirmModelDoesNotAcceptEnter(t *testing.T) {
+	// 默认拒绝语义要求 Enter 不能误触成确认.
 	t.Parallel()
 
 	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
@@ -38,6 +40,7 @@ func TestConfirmModelDoesNotAcceptEnter(t *testing.T) {
 }
 
 func TestConfirmModelRejectsEscape(t *testing.T) {
+	// Esc 应稳定走取消路径, 这是最常见的退出操作.
 	t.Parallel()
 
 	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)
@@ -52,6 +55,7 @@ func TestConfirmModelRejectsEscape(t *testing.T) {
 }
 
 func TestConfirmModelSupportsScrolling(t *testing.T) {
+	// 风险项很多时必须能滚动, 否则用户无法完整审阅高风险操作.
 	t.Parallel()
 
 	var risks []output.RiskItem
@@ -71,6 +75,7 @@ func TestConfirmModelSupportsScrolling(t *testing.T) {
 }
 
 func TestConfirmModelShrinksToNarrowTerminal(t *testing.T) {
+	// 确认界面也要跟随窄终端缩小, 不能因为高风险就允许溢出.
 	t.Parallel()
 
 	model := newConfirmModel([]output.RiskItem{{Kind: "risky clean root", Path: "/tmp/a"}}, true)

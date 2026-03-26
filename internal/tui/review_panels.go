@@ -11,6 +11,7 @@ import (
 )
 
 // renderContent 只负责把各个 panel 拼成滚动区内容, 不处理页头和页脚.
+// 这样 reviewModel.View 可以专注最外层布局, 各 panel 也更容易单独测试宽度约束.
 func (m reviewModel) renderContent() string {
 	sections := []string{
 		m.renderOverviewPanel(),
@@ -28,6 +29,7 @@ func (m reviewModel) renderContent() string {
 }
 
 // renderOverviewPanel 展示配置定位信息和本次运行真正生效的配置字段.
+// 它回答的是“这次命令到底按哪份配置、哪组参数在跑”.
 func (m reviewModel) renderOverviewPanel() string {
 	outerWidth := m.bodyWidth()
 	innerWidth := contentWidth(m.styles.panel, outerWidth)
@@ -99,6 +101,7 @@ func (m reviewModel) renderEntrySection() string {
 }
 
 // renderEntryCard 是长路径场景下比纯表格更易读的计划动作展示形式.
+// dry-run 的核心对象是路径, 不是数值列, 所以卡片式布局比多列表格更适合长路径场景.
 func (m reviewModel) renderEntryCard(index int, entry output.Entry, outerWidth int) string {
 	if outerWidth < 16 {
 		return m.renderCompactEntryCard(index, entry, outerWidth)
@@ -199,38 +202,30 @@ func (m reviewModel) renderCheckPanel() string {
 }
 
 func (m reviewModel) effectiveConfigLines() []string {
-	return output.ActiveVerboseLines(m.data.VerboseLines, m.data.StageCounts)
+	groups := output.ActiveConfigGroups(m.data.ConfigGroups, m.data.StageCounts)
+	lines := make([]string, 0, len(groups))
+	for _, group := range groups {
+		lines = append(lines, output.RenderConfigGroup(group))
+	}
+	return lines
 }
 
 // effectiveConfigRows 会把 link/create/clean 的配置摘要展开成字段级行.
 // 这样既便于表格展示, 也避免把一整串配置挤进同一个单元格.
 func (m reviewModel) effectiveConfigRows() []tableRow {
-	rows := make([]tableRow, 0, len(m.data.VerboseLines)*4)
-	for _, line := range m.effectiveConfigLines() {
-		group, value, ok := strings.Cut(line, ": ")
-		if !ok {
-			rows = append(rows, tableRow{Label: "config", Value: line})
+	groups := output.ActiveConfigGroups(m.data.ConfigGroups, m.data.StageCounts)
+	rows := make([]tableRow, 0, len(groups)*4)
+	for _, group := range groups {
+		if len(group.Fields) == 0 {
+			rows = append(rows, tableRow{Label: group.Scope, Value: "-"})
 			continue
 		}
-		if !strings.Contains(value, "=") {
-			rows = append(rows, tableRow{Label: group, Value: value})
-			continue
-		}
-		fields := strings.Fields(value)
-		if len(fields) == 0 {
-			rows = append(rows, tableRow{Label: group, Value: "-"})
-			continue
-		}
-		for _, field := range fields {
-			name, fieldValue, ok := strings.Cut(field, "=")
-			if !ok {
-				rows = append(rows, tableRow{Label: group, Value: field})
-				continue
+		for _, field := range group.Fields {
+			label := group.Scope
+			if field.Key != "" {
+				label += "." + field.Key
 			}
-			rows = append(rows, tableRow{
-				Label: group + "." + name,
-				Value: fieldValue,
-			})
+			rows = append(rows, tableRow{Label: label, Value: field.Value})
 		}
 	}
 	return rows
@@ -242,6 +237,7 @@ type tableRow struct {
 }
 
 // renderOverviewTable 用 bubbles/table 渲染概览区的字段表.
+// 当宽度过窄时会主动降级成简单键值列表, 避免为了维持表格样式把布局撑坏.
 func (m reviewModel) renderOverviewTable(rows []tableRow, width int) string {
 	if len(rows) == 0 {
 		return ""

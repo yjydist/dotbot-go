@@ -18,6 +18,8 @@ func reviewTitle(mode output.ReviewMode) string {
 	}
 }
 
+// statusStyle 统一把执行状态映射到 TUI badge 样式.
+// review 和 confirm 都依赖这层映射, 避免各处手写颜色判断.
 func statusStyle(s styles, status output.Status) lipgloss.Style {
 	switch status {
 	case output.StatusSkipped, output.StatusReplaced:
@@ -41,6 +43,7 @@ func contentWidth(style lipgloss.Style, outerWidth int) int {
 	return max(outerWidth-style.GetHorizontalFrameSize(), 1)
 }
 
+// wrapBullet 用来把风险项或摘要项渲染成可换行的项目符号列表.
 func wrapBullet(value string, width int) string {
 	lines := wrapText(value, max(width-2, 1))
 	if len(lines) == 0 {
@@ -53,6 +56,8 @@ func wrapBullet(value string, width int) string {
 	return strings.Join(result, "\n")
 }
 
+// wrapLabelValue 用于 target/source/action 这类“标签: 值”结构.
+// 它会尽量把标签留在首行, 宽度太窄时再整体降级成普通换行文本.
 func wrapLabelValue(label, value string, width int, labelStyle lipgloss.Style) string {
 	prefix := label + ": "
 	if displayWidth(prefix) >= width {
@@ -76,6 +81,8 @@ func wrapLabelValue(label, value string, width int, labelStyle lipgloss.Style) s
 	return strings.Join(rendered, "\n")
 }
 
+// wrapText 按终端 cell width 切行, 而不是按 rune 数切行.
+// 这样中文路径和双宽字符不会把 panel/card 的右边框撑坏.
 func wrapText(value string, width int) []string {
 	if width <= 0 || value == "" {
 		return []string{value}
@@ -112,6 +119,8 @@ func wrapText(value string, width int) []string {
 	return lines
 }
 
+// padBlock 会把多行内容逐行补齐到目标宽度.
+// renderSized 依赖它来确保交给 lipgloss 画边框前, 内容块本身已经是稳定宽度.
 func padBlock(value string, width int) string {
 	lines := strings.Split(value, "\n")
 	for i, line := range lines {
@@ -158,6 +167,7 @@ func displayWidth(value string) int {
 	return runewidth.StringWidth(value)
 }
 
+// max/clamp 只服务于布局计算, 统一收口到这里方便之后调 TUI 宽度策略.
 func max(a, b int) int {
 	if a > b {
 		return a

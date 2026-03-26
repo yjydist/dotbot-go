@@ -31,6 +31,8 @@ type Options struct {
 }
 
 var (
+	// 这几个变量保留为包级 hook, 是为了测试里可以替换终端探测和 TUI 入口,
+	// 避免 runner 测试真的依赖交互终端.
 	interactiveTerminal = isInteractive
 	runReviewUI         = tui.RunReview
 	runConfirmUI        = tui.RunConfirm
@@ -46,6 +48,10 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // 2. 加载配置
 // 3. 依次执行 create -> link -> clean
 // 4. 根据 dry-run/check/normal 三种模式选择输出路径
+//
+// 这个函数刻意保持“单向流水线”结构:
+// 配置只加载一次, 阶段按固定顺序推进, 失败立即停止.
+// 这样定位问题时可以直接沿着 create -> link -> clean 往下看.
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	opts, shouldExit, exitCode, err := parseFlags(args, stdout, stderr)
 	if err != nil {
@@ -78,8 +84,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	showReviewUI := shouldUseReviewUI(opts, stdin, stdout)
-	verboseLines := buildVerboseLines(*cfg)
+	configGroups := buildConfigGroups(*cfg)
 	// check 复用 dry-run 的执行路径, 包括失败时的逐项输出语义.
+	// 这样可以保证“只预览”和“只校验”在错误暴露粒度上保持一致,
+	// 不会出现 dry-run 能看到阶段条目, check 却只有一条汇总错误的分叉行为.
 	dryRun := opts.DryRun || opts.Check
 	outOpts := output.Options{
 		Mode:        opts.OutputMode,
@@ -92,7 +100,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 	}
 
-	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, dryRun)
+	createResult, err := creator.Apply(cfg.Create.Paths, cfg.Create.Mode, opts.DryRun, opts.Check)
 	if !opts.Check && !opts.DryRun {
 		output.WriteEntries(stdout, outOpts, createResult.Entries)
 	}
@@ -117,6 +125,8 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	reviewRisks := collectRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
 	confirmRisks := collectConfirmRiskItems(opts, riskyProtectedTargets, riskyCleanRoots)
+	// 审阅模式和正式执行共用同一套风险发现结果,
+	// 但前者展示“全部风险”, 后者只保留“仍需确认”的风险.
 	if !opts.DryRun && !opts.Check && interactiveTerminal(stdin, stdout) && len(confirmRisks) > 0 {
 		if err := runConfirmUI(stdin, stdout, opts.NoColor, confirmRisks); err != nil {
 			fmt.Fprintln(stderr, err)
@@ -125,6 +135,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 	linkResult, err := linker.Apply(cfg.Links, linker.ApplyOptions{
 		DryRun:               dryRun,
+		Check:                opts.Check,
 		ProtectedTargets:     protectedTargets,
 		AllowProtectedTarget: allowProtectedTarget,
 	})
@@ -138,8 +149,9 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, err)
 		return exitRuntime
 	}
-	cleanResult, err := cleaner.Apply(*cfg, cleaner.ApplyOptions{
+	cleanResult, err := cleaner.Apply(cfg.Clean.Paths, cfg.BaseDir, cfg.Clean.Force, cfg.Clean.Recursive, cleaner.ApplyOptions{
 		DryRun:          dryRun,
+		Check:           opts.Check,
 		ProtectedRoots:  protectedRoots,
 		AllowRiskyClean: allowRiskyClean,
 	})
@@ -166,6 +178,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	}
 
 	// reviewData 是 dry-run / check 两种审阅视图共享的数据快照.
+	// 这里先把执行结果压平成统一模型, 后面无论走 TUI 还是纯文本回退都只读这份数据.
 	reviewData := output.ReviewData{
 		ConfigPath:   cfg.Path,
 		BaseDir:      cfg.BaseDir,
@@ -173,7 +186,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		Entries:      collectReviewEntries(createResult.Entries, linkResult.Entries, cleanResult.Entries),
 		Risks:        reviewRisks,
 		Summary:      summary,
-		VerboseLines: verboseLines,
+		ConfigGroups: configGroups,
 	}
 
 	if opts.Check {

@@ -9,6 +9,8 @@ import (
 	"github.com/yjydist/dotbot-go/internal/output"
 )
 
+// sampleDryRunReviewData 提供一份最小但足够复杂的审阅样例,
+// 让各类 TUI 测试都能复用同一组输入事实.
 func sampleDryRunReviewData() output.ReviewData {
 	return output.ReviewData{
 		Mode:        output.ReviewModeDryRun,
@@ -16,10 +18,10 @@ func sampleDryRunReviewData() output.ReviewData {
 		BaseDir:     "/repo",
 		StageCounts: output.StageCounts{Create: 1, Link: 2, Clean: 1},
 		Risks:       []output.RiskItem{{Kind: "replace protected target", Path: "/tmp/a"}},
-		VerboseLines: []string{
-			"link: create=true relink=false force=false relative=false ignore_missing=false",
-			"create: mode=0755",
-			"clean: force=false recursive=true",
+		ConfigGroups: []output.ConfigGroup{
+			{Scope: "link", Fields: []output.ConfigField{{Key: "create", Value: "true"}, {Key: "relink", Value: "false"}, {Key: "force", Value: "false"}, {Key: "relative", Value: "false"}, {Key: "ignore_missing", Value: "false"}}},
+			{Scope: "create", Fields: []output.ConfigField{{Key: "mode", Value: "0755"}}},
+			{Scope: "clean", Fields: []output.ConfigField{{Key: "force", Value: "false"}, {Key: "recursive", Value: "true"}}},
 		},
 		Entries: []output.Entry{
 			{Stage: "link", Target: "/tmp/a", Source: "/repo/a", Decision: "replace", Status: output.StatusReplaced, Message: "protected target, confirmation required"},
@@ -28,6 +30,8 @@ func sampleDryRunReviewData() output.ReviewData {
 	}
 }
 
+// assertRenderedWithinWidth 用来保证渲染结果不会超过给定宽度.
+// TUI 的很多回归都是“功能没错, 但布局溢出了”, 所以这类断言非常关键.
 func assertRenderedWithinWidth(t *testing.T, rendered string, maxWidth int) {
 	t.Helper()
 

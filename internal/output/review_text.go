@@ -9,6 +9,7 @@ import (
 )
 
 // WriteReviewText 是非交互环境下的审阅输出回退实现.
+// 它和 TUI 共享同一个 ReviewData, 但布局上只追求稳定和可重定向, 不追求复杂交互.
 func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 	if opts.Mode == ModeQuiet {
 		return
@@ -31,8 +32,8 @@ func WriteReviewText(w io.Writer, opts Options, data ReviewData) {
 		}
 	}
 	if opts.Mode == ModeVerbose {
-		for _, line := range ActiveVerboseLines(data.VerboseLines, data.StageCounts) {
-			fmt.Fprintf(w, "  %s\n", line)
+		for _, group := range ActiveConfigGroups(data.ConfigGroups, data.StageCounts) {
+			fmt.Fprintf(w, "  %s\n", RenderConfigGroup(group))
 		}
 	}
 
@@ -121,28 +122,49 @@ func displayWidth(value string) int {
 	return runewidth.StringWidth(value)
 }
 
-// ActiveVerboseLines 过滤掉本次运行不会参与执行的阶段配置摘要.
-func ActiveVerboseLines(lines []string, counts StageCounts) []string {
-	filtered := make([]string, 0, len(lines))
-	for _, line := range lines {
-		switch {
-		case strings.HasPrefix(line, "link:"):
+// ActiveConfigGroups 过滤掉本次运行不会参与执行的阶段配置摘要.
+// 这样 verbose 审阅文本不会把“根本不会跑到的阶段配置”也展示出来, 避免误导排查.
+func ActiveConfigGroups(groups []ConfigGroup, counts StageCounts) []ConfigGroup {
+	filtered := make([]ConfigGroup, 0, len(groups))
+	for _, group := range groups {
+		switch scopeStage(group.Scope) {
+		case "link":
 			if counts.Link > 0 {
-				filtered = append(filtered, line)
+				filtered = append(filtered, group)
 			}
-		case strings.HasPrefix(line, "create:"):
+		case "create":
 			if counts.Create > 0 {
-				filtered = append(filtered, line)
+				filtered = append(filtered, group)
 			}
-		case strings.HasPrefix(line, "clean:"):
+		case "clean":
 			if counts.Clean > 0 {
-				filtered = append(filtered, line)
+				filtered = append(filtered, group)
 			}
 		default:
-			if line != "" {
-				filtered = append(filtered, line)
-			}
+			filtered = append(filtered, group)
 		}
 	}
 	return filtered
+}
+
+func RenderConfigGroup(group ConfigGroup) string {
+	parts := make([]string, 0, len(group.Fields))
+	for _, field := range group.Fields {
+		if field.Key == "" {
+			parts = append(parts, field.Value)
+			continue
+		}
+		parts = append(parts, field.Key+"="+field.Value)
+	}
+	if len(parts) == 0 {
+		return group.Scope + ": -"
+	}
+	return group.Scope + ": " + strings.Join(parts, " ")
+}
+
+func scopeStage(scope string) string {
+	if idx := strings.Index(scope, "["); idx >= 0 {
+		return scope[:idx]
+	}
+	return scope
 }

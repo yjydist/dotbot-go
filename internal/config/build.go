@@ -8,8 +8,16 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// buildConfig 把原始 TOML 结构转换成执行层直接使用的 Config.
-// 这里会统一处理 default 归并, 路径解析和重复 target 校验.
+// buildConfig 把“原始 TOML + 外部环境”压缩成运行期 Config.
+//
+// 这里是配置层最核心的归一化步骤:
+// - 把 default.* 合并到具体阶段配置
+// - 统一完成 ~ 和相对路径解析
+// - 把 string/bool 指针转换成运行期最终值
+// - 提前拦截 duplicate target 这类执行期很难优雅处理的问题
+//
+// runner 之后看到的 Config 不再保留“字段是显式写的还是从 default 继承的”这类信息,
+// 因为执行层只关心最终应该怎么做.
 func buildConfig(raw rawConfig, meta toml.MetaData, configPath, workingDir, homeDir string) (*Config, error) {
 	baseDir := filepath.Dir(configPath)
 
@@ -64,6 +72,8 @@ func buildConfig(raw rawConfig, meta toml.MetaData, configPath, workingDir, home
 
 	targets := make(map[string]int)
 	for i, link := range raw.Links {
+		// duplicate target 在配置阶段报错更直接,
+		// 否则执行阶段会遇到“后一个 link 覆盖前一个 link”这类不透明行为.
 		cfgLink, err := resolveLink(link, cfg.Default.Link, baseDir, workingDir, homeDir)
 		if err != nil {
 			return nil, configError(fmt.Sprintf("[[link]][%d]", i+1), err.Error())
@@ -81,7 +91,11 @@ func buildConfig(raw rawConfig, meta toml.MetaData, configPath, workingDir, home
 	return cfg, nil
 }
 
-// resolveLink 会把单个 raw link 配置解析成可执行的 LinkConfig.
+// resolveLink 负责把单个 [[link]] 的“原始声明”压缩成执行层最终值.
+// 相比 create/clean, link 的维度最多, 所以也最适合在这里一次性完成:
+// - 必填字段校验
+// - source/target 路径基准差异
+// - default.link 布尔开关归并
 func resolveLink(raw rawLinkConfig, defaults LinkDefaults, baseDir, workingDir, homeDir string) (LinkConfig, error) {
 	if strings.TrimSpace(raw.Target) == "" {
 		return LinkConfig{}, fmt.Errorf("target: required field is missing")

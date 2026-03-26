@@ -12,6 +12,8 @@ import (
 )
 
 // validateUndecoded 用来把 TOML 未消费掉的字段直接转成配置错误.
+// 这里故意不做“忽略未知字段”的兼容策略, 因为 dotfiles 配置一旦写错,
+// 静默忽略通常比直接报错更危险.
 func validateUndecoded(meta toml.MetaData) error {
 	undecoded := meta.Undecoded()
 	if len(undecoded) == 0 {
@@ -26,6 +28,7 @@ func validateUndecoded(meta toml.MetaData) error {
 }
 
 // resolvePaths 用统一规则解析 [create].paths 和 [clean].paths.
+// 两者都以当前工作目录为相对路径基准, 与 [[link]].source 明确区分.
 func resolvePaths(paths []string, homeDir, workingDir string) ([]string, error) {
 	resolved := make([]string, 0, len(paths))
 	for i, path := range paths {
@@ -77,6 +80,7 @@ func expandHome(path, homeDir string) (string, error) {
 }
 
 // resolveMode 体现显式值 > fallback > 硬编码默认值 的优先级.
+// 这里把优先级逻辑放在配置层, 可以避免执行阶段再反复判断“到底该看哪一层”.
 func resolveMode(explicit, fallback string, hardDefault os.FileMode) (os.FileMode, error) {
 	if explicit != "" {
 		return parseMode(explicit)
@@ -107,6 +111,7 @@ func parseMode(value string) (os.FileMode, error) {
 }
 
 // boolValue 统一处理 bool 字段的三层优先级归并.
+// raw 结构用 *bool 的原因也在这里: nil 才能表达“用户根本没写”.
 func boolValue(explicit, fallback *bool, hardDefault bool) bool {
 	if explicit != nil {
 		return *explicit

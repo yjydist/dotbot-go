@@ -12,6 +12,7 @@ import (
 )
 
 func TestRunUsesReviewUIForDryRunWhenInteractive(t *testing.T) {
+	// 交互终端里的 dry-run 默认应进入 TUI 审阅界面, 而不是文本回退.
 	fixture := newRunnerFixture(t, true)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -49,6 +50,7 @@ func TestRunUsesReviewUIForDryRunWhenInteractive(t *testing.T) {
 }
 
 func TestRunUsesReviewUIForCheckWhenInteractive(t *testing.T) {
+	// check 在交互终端里也应该走摘要审阅界面.
 	fixture := newRunnerFixture(t, true)
 	fixture.writeConfig(t,
 		"[[link]]",
@@ -83,6 +85,7 @@ func TestRunUsesReviewUIForCheckWhenInteractive(t *testing.T) {
 }
 
 func TestRunReviewUIMarksAllowedRiskItems(t *testing.T) {
+	// 已放行风险在审阅界面中需要继续可见, 只是状态变成 allowed.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {
@@ -122,6 +125,7 @@ func TestRunReviewUIMarksAllowedRiskItems(t *testing.T) {
 }
 
 func TestRunReviewUIKeepsAllowedRiskItemsVisible(t *testing.T) {
+	// 即使 override 已提供, 审阅界面也不能把高风险项直接隐藏掉.
 	fixture := newRunnerFixture(t, false)
 	source := filepath.Join(fixture.baseDir, "source.txt")
 	if err := os.WriteFile(source, []byte("hello"), 0o644); err != nil {

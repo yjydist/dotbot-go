@@ -11,6 +11,7 @@ import (
 )
 
 func TestReviewModelViewDryRunIncludesRiskAndCards(t *testing.T) {
+	// dry-run 主界面需要同时展示标题, 风险, 概览表格和计划动作卡片.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), false)
@@ -63,6 +64,7 @@ func TestReviewModelViewDryRunIncludesRiskAndCards(t *testing.T) {
 }
 
 func TestReviewModelViewCheckOmitsPlanTable(t *testing.T) {
+	// check 界面和 dry-run 共用布局骨架, 但必须隐藏计划动作区.
 	t.Parallel()
 
 	model := newReviewModel(output.ReviewData{
@@ -70,9 +72,9 @@ func TestReviewModelViewCheckOmitsPlanTable(t *testing.T) {
 		ConfigPath:  "/repo/dotbot-go.toml",
 		BaseDir:     "/repo",
 		StageCounts: output.StageCounts{Create: 0, Link: 1, Clean: 0},
-		VerboseLines: []string{
-			"link: create=false relink=false force=false relative=false ignore_missing=false",
-			"create: mode=0777",
+		ConfigGroups: []output.ConfigGroup{
+			{Scope: "link", Fields: []output.ConfigField{{Key: "create", Value: "false"}, {Key: "relink", Value: "false"}, {Key: "force", Value: "false"}, {Key: "relative", Value: "false"}, {Key: "ignore_missing", Value: "false"}}},
+			{Scope: "create", Fields: []output.ConfigField{{Key: "mode", Value: "0777"}}},
 		},
 		Result: "check ok",
 	}, true)
@@ -104,6 +106,7 @@ func TestReviewModelViewCheckOmitsPlanTable(t *testing.T) {
 }
 
 func TestReviewModelSupportsNavigationKeys(t *testing.T) {
+	// review 界面的基础导航键位必须稳定, 否则长计划列表很难审阅.
 	t.Parallel()
 
 	var entries []output.Entry
@@ -146,6 +149,7 @@ func TestReviewModelSupportsNavigationKeys(t *testing.T) {
 }
 
 func TestReviewModelKeepsMixedLinkSummaryAsSingleOverviewValue(t *testing.T) {
+	// mixed per-link values 必须保持成一条完整摘要, 不能被错误拆碎.
 	t.Parallel()
 
 	model := newReviewModel(output.ReviewData{
@@ -153,8 +157,8 @@ func TestReviewModelKeepsMixedLinkSummaryAsSingleOverviewValue(t *testing.T) {
 		ConfigPath:  "/repo/dotbot-go.toml",
 		BaseDir:     "/repo",
 		StageCounts: output.StageCounts{Link: 2},
-		VerboseLines: []string{
-			"link: mixed per-link values",
+		ConfigGroups: []output.ConfigGroup{
+			{Scope: "link", Fields: []output.ConfigField{{Value: "mixed per-link values"}}},
 		},
 	}, true)
 	model.width = 120
@@ -173,6 +177,7 @@ func TestReviewModelKeepsMixedLinkSummaryAsSingleOverviewValue(t *testing.T) {
 }
 
 func TestReviewModelShowsAllowedRiskState(t *testing.T) {
+	// 已放行风险在 TUI 中应该继续可见, 并带上 allowed 状态说明.
 	t.Parallel()
 
 	model := newReviewModel(output.ReviewData{
@@ -200,6 +205,7 @@ func TestReviewModelShowsAllowedRiskState(t *testing.T) {
 }
 
 func TestReviewModelShrinksToNarrowTerminal(t *testing.T) {
+	// reviewModel 必须跟随真实终端缩小, 不能强行维持大布局.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)
@@ -221,6 +227,7 @@ func TestReviewModelShrinksToNarrowTerminal(t *testing.T) {
 }
 
 func TestReviewModelViewStaysWithinNarrowTerminalWidth(t *testing.T) {
+	// 最外层 View 的标题, 摘要和 footer 也要遵守窄终端宽度约束.
 	t.Parallel()
 
 	model := newReviewModel(sampleDryRunReviewData(), true)

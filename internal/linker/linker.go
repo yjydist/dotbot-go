@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/fscheck"
 	"github.com/yjydist/dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/policy"
 )
 
 // Result 汇总 link 阶段的动作统计和输出条目.
@@ -18,13 +20,16 @@ type Result struct {
 }
 
 // ApplyOptions 控制 link 阶段的 dry-run 和高风险覆盖边界.
+// protected/allow 这组字段由 runner 提前计算好, linker 只负责执行最后一道防线.
 type ApplyOptions struct {
 	DryRun               bool
+	Check                bool
 	ProtectedTargets     []string
 	AllowProtectedTarget bool
 }
 
 // Apply 逐个执行 [[link]] 配置, 并保留与输入顺序一致的日志条目.
+// 这里保持“逐项执行, 失败即停”的策略, 因为 link 的副作用本身就和输入顺序强相关.
 func Apply(links []config.LinkConfig, opts ApplyOptions) (Result, error) {
 	result := Result{}
 	for i, link := range links {
@@ -53,6 +58,12 @@ type change struct {
 
 // applyOne 实现单个 link 的完整决策流程:
 // 校验 source, 处理 create/relink/force, 最终落到创建或替换 symlink.
+//
+// 这个函数分支很多, 但核心判断顺序是固定的:
+// 1. source 是否可用
+// 2. target 父目录是否满足 create 语义
+// 3. target 当前是缺失 / symlink / 普通文件目录
+// 4. 再决定是跳过, 创建, relink, 还是 force 覆盖
 func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, bool, error) {
 	entry := output.Entry{Stage: "link", Target: link.Target, Source: link.Source}
 	if _, err := os.Stat(link.Source); err != nil {
@@ -104,6 +115,8 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		}
 	}
 
+	// 这里先记住“target 是否缺失”, 后面 relative=true 还会复用 err.
+	// 如果直接继续使用同一个 err, 很容易把 lstat 的语义覆盖掉.
 	info, err := os.Lstat(link.Target)
 	targetMissing := os.IsNotExist(err)
 	if err != nil && !targetMissing {
@@ -127,7 +140,15 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	if targetMissing {
 		entry.Decision = "linked"
 		entry.Status = output.StatusLinked
-		if opts.DryRun {
+		if opts.Check {
+			if err := fscheck.CheckWritableParent(link.Target); err != nil {
+				entry.Decision = string(output.StatusFailed)
+				entry.Status = output.StatusFailed
+				entry.Message = err.Error()
+				return entry, change{}, false, err
+			}
+		}
+		if opts.DryRun || opts.Check {
 			entry.Decision = "create symlink"
 			return entry, change{linked: true}, false, nil
 		}
@@ -156,16 +177,25 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		}
 		entry.Decision = "replaced"
 		entry.Status = output.StatusReplaced
-		if opts.DryRun {
+		if opts.Check {
+			if err := fscheck.CheckWritableParent(link.Target); err != nil {
+				entry.Decision = string(output.StatusFailed)
+				entry.Status = output.StatusFailed
+				entry.Message = err.Error()
+				return entry, change{}, false, err
+			}
+		}
+		if opts.DryRun || opts.Check {
 			entry.Decision = "replace"
-			if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+			if policy.IsProtectedTarget(link.Target, opts.ProtectedTargets) {
 				entry.Message = "protected target, confirmation required"
 			} else if link.Force {
 				entry.Message = "force=true"
 			}
 			return entry, change{replaced: true}, false, nil
 		}
-		if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+		// 受保护 symlink 和受保护目录/文件一样, 都必须经过同一套确认护栏.
+		if policy.IsProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
 			entry.Decision = string(output.StatusFailed)
 			entry.Status = output.StatusFailed
 			entry.Message = "protected target requires confirmation"
@@ -195,14 +225,22 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 	entry.Decision = "replaced"
 	entry.Status = output.StatusReplaced
 	entry.Message = "force=true"
-	if opts.DryRun {
+	if opts.Check {
+		if err := fscheck.CheckWritableParent(link.Target); err != nil {
+			entry.Decision = string(output.StatusFailed)
+			entry.Status = output.StatusFailed
+			entry.Message = err.Error()
+			return entry, change{}, false, err
+		}
+	}
+	if opts.DryRun || opts.Check {
 		entry.Decision = "replace"
-		if isProtectedTarget(link.Target, opts.ProtectedTargets) {
+		if policy.IsProtectedTarget(link.Target, opts.ProtectedTargets) {
 			entry.Message = "protected target, confirmation required"
 		}
 		return entry, change{replaced: true}, false, nil
 	}
-	if isProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
+	if policy.IsProtectedTarget(link.Target, opts.ProtectedTargets) && !opts.AllowProtectedTarget {
 		entry.Decision = string(output.StatusFailed)
 		entry.Status = output.StatusFailed
 		entry.Message = "protected target requires confirmation"
@@ -221,21 +259,4 @@ func applyOne(link config.LinkConfig, opts ApplyOptions) (output.Entry, change, 
 		return entry, change{}, false, fmt.Errorf("create symlink %s -> %s: %w", link.Target, linkPath, err)
 	}
 	return entry, change{replaced: true}, false, nil
-}
-
-// isProtectedTarget 用来识别需要二次确认的危险覆盖目标.
-func isProtectedTarget(target string, protected []string) bool {
-	cleanedTarget := filepath.Clean(target)
-	if cleanedTarget == string(filepath.Separator) {
-		return true
-	}
-	for _, path := range protected {
-		if path == "" {
-			continue
-		}
-		if cleanedTarget == filepath.Clean(path) {
-			return true
-		}
-	}
-	return false
 }

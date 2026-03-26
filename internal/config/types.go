@@ -12,7 +12,8 @@ type LoadOptions struct {
 }
 
 // Config 是运行阶段使用的最终配置模型.
-// 所有路径和默认值都已经在加载阶段归一化, 执行层不再处理原始 TOML 细节.
+// 约定是: 只要拿到 Config, 就可以直接执行, 不再需要关心 TOML 解码细节.
+// 这也是 config 包与 runner/create/link/clean 的边界.
 type Config struct {
 	Path    string
 	BaseDir string
@@ -75,6 +76,7 @@ type LinkConfig struct {
 
 // rawConfig 及其子结构只服务于 TOML 解码阶段.
 // 这层保留指针和原始字符串, 方便后续显式区分"未填写"和"填写了零值".
+// 一旦进入 buildConfig, 这些原始结构就不应该再泄漏到执行层.
 type rawConfig struct {
 	Default rawDefaultConfig `toml:"default"`
 	Create  rawCreateConfig  `toml:"create"`

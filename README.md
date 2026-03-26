@@ -4,6 +4,8 @@
 
 它受到 [Dotbot](https://github.com/anishathalye/dotbot) 启发, 但不会完整复刻 Dotbot 的全部能力. `dotbot-go` 有意保持更小的范围, 只专注于 dotfiles 的安装和同步, 不实现 plugin 系统, 也不提供 shell 执行能力.
 
+如果你要阅读源码, 可以先看 [`docs/code-reading-guide.md`](docs/code-reading-guide.md).
+
 ## 项目简介
 
 管理 dotfiles 的目标通常很简单:
@@ -132,7 +134,7 @@ dotbot-go --dry-run -c dotbot-go.toml
 - `--check` 只校验配置和关键运行前条件, 不修改文件系统
 - `--verbose` 和 `--quiet` 互斥
 - 交互终端里, `--dry-run` 和 `--check` 会自动进入审阅界面; 非交互环境回退为纯文本输出
-- `--verbose` 会在文本回退中额外展示生效配置摘要
+- `--verbose` 会在文本回退中额外展示生效配置摘要; 如果 `link` 的生效值彼此不一致, 还会补充逐项摘要
 - 终端环境下默认允许彩色输出, `--no-color` 可关闭
 - 命中受保护目标时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-protected-target`
 - 命中高风险 clean 根路径时, 交互环境会进入风险确认界面, 非交互环境需显式传入 `--allow-risky-clean`

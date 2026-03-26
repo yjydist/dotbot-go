@@ -98,6 +98,7 @@ type reviewModel struct {
 }
 
 // newReviewModel 构造 dry-run / check 共用的只读审阅界面.
+// reviewModel 本身不关心命令如何执行, 只关心如何把 ReviewData 组织成可滚动页面.
 func newReviewModel(data output.ReviewData, noColor bool) reviewModel {
 	m := reviewModel{
 		data:   data,
@@ -117,6 +118,8 @@ func (m reviewModel) Init() tea.Cmd {
 func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		// TUI 必须尊重真实终端尺寸, 不能为了“好看”强行把布局抬大,
+		// 否则在 IDE split pane 或小终端里反而会溢出.
 		m.width = max(msg.Width, 1)
 		m.height = max(msg.Height, 1)
 		m.viewport.Width = m.bodyWidth()
@@ -148,6 +151,8 @@ func (m reviewModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m reviewModel) View() string {
+	// View 只负责“页头 + viewport + 页脚”的最外层装配,
+	// 具体 panel 内容都下沉到 review_panels.go.
 	outerWidth := m.bodyWidth() + m.styles.doc.GetHorizontalFrameSize()
 	docWidth := contentWidth(m.styles.doc, outerWidth)
 

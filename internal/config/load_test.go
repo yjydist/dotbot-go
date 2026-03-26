@@ -8,6 +8,8 @@ import (
 )
 
 func TestLoadAppliesDefaultsAndResolvesPaths(t *testing.T) {
+	// 这个用例覆盖配置层最核心的承诺:
+	// default 合并, source/target 路径基准差异, 以及 ~ 展开.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -83,6 +85,7 @@ func TestLoadAppliesDefaultsAndResolvesPaths(t *testing.T) {
 }
 
 func TestLoadRejectsUnknownField(t *testing.T) {
+	// 未知字段必须在加载阶段直接失败, 避免用户误以为配置已经生效.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -107,6 +110,7 @@ func TestLoadRejectsUnknownField(t *testing.T) {
 }
 
 func TestLoadRejectsDuplicateTargets(t *testing.T) {
+	// duplicate target 必须在配置阶段被拦截, 不能把冲突拖到执行阶段.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -134,6 +138,7 @@ func TestLoadRejectsDuplicateTargets(t *testing.T) {
 }
 
 func TestLoadRejectsMissingRequiredFields(t *testing.T) {
+	// [[link]] 缺少必填字段时, 错误需要明确落在配置路径上.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -156,6 +161,7 @@ func TestLoadRejectsMissingRequiredFields(t *testing.T) {
 }
 
 func TestLoadRejectsInvalidDefaultCreateMode(t *testing.T) {
+	// default.create.mode 解析失败时, 也要保留字段路径帮助定位.
 	t.Parallel()
 
 	baseDir := t.TempDir()
@@ -182,6 +188,7 @@ func TestLoadRejectsInvalidDefaultCreateMode(t *testing.T) {
 }
 
 func TestLoadResolvesCleanPathsAndMergesDefaults(t *testing.T) {
+	// clean 既有路径解析, 也有 default 覆盖链路, 这条用例同时卡住两者.
 	t.Parallel()
 
 	baseDir := t.TempDir()

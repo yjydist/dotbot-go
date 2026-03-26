@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yjydist/dotbot-go/internal/config"
+	"github.com/yjydist/dotbot-go/internal/fscheck"
 	"github.com/yjydist/dotbot-go/internal/output"
+	"github.com/yjydist/dotbot-go/internal/policy"
 )
 
 // Result 汇总 clean 阶段的动作统计和输出条目.
@@ -20,14 +21,18 @@ type Result struct {
 // ApplyOptions 控制 clean 阶段的 dry-run 和高风险 clean 根路径豁免.
 type ApplyOptions struct {
 	DryRun          bool
+	Check           bool
 	ProtectedRoots  []string
 	AllowRiskyClean bool
 }
 
 // Apply 负责遍历 clean.paths, 识别 dead symlink, 并按保守边界决定是否删除.
-func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
+//
+// clean 的设计重点不是“尽可能多删”, 而是“默认保守, 只删用户能解释清楚的失效链接”.
+// 所以这里先判断 risky root, 再决定扫描根, 最后才进入逐项删除判断.
+func Apply(paths []string, baseDir string, force, recursive bool, opts ApplyOptions) (Result, error) {
 	result := Result{}
-	for _, root := range cfg.Clean.Paths {
+	for _, root := range paths {
 		scanRoot := root
 		info, err := os.Lstat(root)
 		if err != nil {
@@ -39,8 +44,10 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 			result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: err.Error()})
 			return result, fmt.Errorf("runtime error: [clean].paths: stat %s: %w", root, err)
 		}
-		riskyReason := riskyRootReason(root, info, opts.ProtectedRoots)
+		riskyReason := policy.RiskyCleanRootReason(root, info, opts.ProtectedRoots)
 		if info.Mode()&os.ModeSymlink != 0 {
+			// clean root 允许是 symlink, 但它属于高风险扫描根.
+			// 一旦允许继续执行, 真正扫描的仍然应该是解析后的实体目录.
 			resolvedRoot, resolveErr := filepath.EvalSymlinks(root)
 			if resolveErr != nil {
 				result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: resolveErr.Error()})
@@ -53,7 +60,7 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 				return result, fmt.Errorf("runtime error: [clean].paths: stat %s: %w", scanRoot, err)
 			}
 		}
-		if riskyReason != "" && !opts.AllowRiskyClean && !opts.DryRun {
+		if riskyReason != "" && !opts.AllowRiskyClean && !opts.DryRun && !opts.Check {
 			result.Entries = append(result.Entries, output.Entry{Stage: "clean", Target: root, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: "risky clean requires confirmation"})
 			return result, fmt.Errorf("runtime error: [clean].paths: risky clean requires confirmation or --allow-risky-clean: %s", root)
 		}
@@ -67,7 +74,7 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 		}
 		result.Entries = append(result.Entries, scanEntry)
 
-		if cfg.Clean.Recursive {
+		if recursive {
 			err = filepath.WalkDir(scanRoot, func(path string, d os.DirEntry, walkErr error) error {
 				if walkErr != nil {
 					return walkErr
@@ -75,7 +82,7 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 				if path == scanRoot {
 					return nil
 				}
-				entry, deleted, skipped, err := maybeRemoveDeadLink(path, cfg.BaseDir, cfg.Clean.Force, opts.DryRun)
+				entry, deleted, skipped, err := maybeRemoveDeadLink(path, baseDir, force, opts.DryRun, opts.Check)
 				result.Deleted += deleted
 				result.Skipped += skipped
 				if entry != nil {
@@ -89,7 +96,7 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 				return result, fmt.Errorf("runtime error: [clean].paths: read %s: %w", scanRoot, readErr)
 			}
 			for _, entry := range entries {
-				out, deleted, skipped, err := maybeRemoveDeadLink(filepath.Join(scanRoot, entry.Name()), cfg.BaseDir, cfg.Clean.Force, opts.DryRun)
+				out, deleted, skipped, err := maybeRemoveDeadLink(filepath.Join(scanRoot, entry.Name()), baseDir, force, opts.DryRun, opts.Check)
 				result.Deleted += deleted
 				result.Skipped += skipped
 				if out != nil {
@@ -109,7 +116,9 @@ func Apply(cfg config.Config, opts ApplyOptions) (Result, error) {
 
 // maybeRemoveDeadLink 只处理“当前路径本身是 dead symlink”的情况.
 // 非 symlink 或目标仍然存在的路径都会被静默跳过.
-func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *output.Entry, deleted, skipped int, err error) {
+// force=false 时还会额外检查 dead target 是否仍位于仓库 baseDir 内,
+// 这是 clean 默认保守边界的真正执行点.
+func maybeRemoveDeadLink(path, baseDir string, force, dryRun, check bool) (entry *output.Entry, deleted, skipped int, err error) {
 	info, err := os.Lstat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -139,7 +148,13 @@ func maybeRemoveDeadLink(path, baseDir string, force, dryRun bool) (entry *outpu
 		return &out, 0, 1, nil
 	}
 	decision := output.Entry{Stage: "clean", Target: path, Decision: "deleted", Status: output.StatusDeleted}
-	if dryRun {
+	if check {
+		if err := fscheck.CheckWritableParent(path); err != nil {
+			out := output.Entry{Stage: "clean", Target: path, Decision: string(output.StatusFailed), Status: output.StatusFailed, Message: err.Error()}
+			return &out, 0, 0, err
+		}
+	}
+	if dryRun || check {
 		decision.Decision = "delete dead symlink"
 		return &decision, 1, 0, nil
 	}
@@ -160,24 +175,4 @@ func isWithinBase(path, baseDir string) bool {
 		return true
 	}
 	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
-}
-
-// riskyRootReason 识别需要确认的 clean 根路径, 例如 symlink root 或受保护目录.
-func riskyRootReason(root string, info os.FileInfo, protectedRoots []string) string {
-	if info.Mode()&os.ModeSymlink != 0 {
-		return "clean root is symlink"
-	}
-	cleanedRoot := filepath.Clean(root)
-	if cleanedRoot == string(filepath.Separator) {
-		return "clean root is protected"
-	}
-	for _, path := range protectedRoots {
-		if path == "" {
-			continue
-		}
-		if cleanedRoot == filepath.Clean(path) {
-			return "clean root is protected"
-		}
-	}
-	return ""
 }

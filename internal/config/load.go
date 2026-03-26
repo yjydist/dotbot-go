@@ -7,7 +7,14 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
-// Load 负责完成配置文件读取, 严格校验和运行期归一化.
+// Load 是配置层唯一公开入口.
+// 它负责三件事:
+// 1. 固化外部环境依赖, 例如工作目录和 HOME
+// 2. 严格解码并拒绝未知字段
+// 3. 把原始 TOML 归一化为执行层直接消费的 Config
+//
+// 设计上刻意不把这些逻辑散落到 runner 或各执行包里,
+// 这样 create/link/clean 都可以假设拿到的是“已校验, 已解析路径, 已合并默认值”的配置.
 func Load(opts LoadOptions) (*Config, error) {
 	if opts.Path == "" {
 		return nil, fmt.Errorf("config path is required")
