@@ -629,7 +629,6 @@ runtime error: [[link]][1].source: source does not exist: /repo/git/gitconfig
 - 失败即停比“尽量继续”更容易理解
 - `force = true` 表示用户明确接受覆盖风险, 工具不承诺恢复执行前状态
 - `clean` 默认只删除 dead target 仍位于仓库基准目录内的失效链接
-- `clean.force` 不会放宽仓库边界
 
 ## P0 Dry Run 与可观察性定稿
 
